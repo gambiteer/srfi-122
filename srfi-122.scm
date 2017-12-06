@@ -27,15 +27,20 @@
       (<html>
        (<head>
 	(<meta> charset: "utf-8")
+        (<meta> name: 'viewport
+                content: "width=device-width, initial-scale=1")
 	(<title> "Nonempty Intervals and Generalized Arrays")
 	(<link> href: "http://srfi.schemers.org/srfi.css"
-		rel: "stylesheet")
+		rel: "stylesheet"
+                type: "test/css")
 	(<script> type: "text/x-mathjax-config" "
 MathJax.Hub.Config({
   tex2jax: {inlineMath: [['$','$'], ['\\\\(','\\\\)']]}
 });")
-	(<script> type: "text/javascript"
-		  src: "https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML")
+	(<script> crossorigin: "anonymous"
+                  integrity:"sha384-Ra6zh6uYMmH5ydwCqqMoykyf1T/+ZcnOQfFPhDrp2kI4OIxadnhsvvA2vv9A7xYv"
+                  type: "text/javascript"
+		  src: "https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML")
 	)
        (<body>
 	(<h1> "Title")
