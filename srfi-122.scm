@@ -78,7 +78,7 @@ MathJax.Hub.Config({
 	      (<li> "Finalized: 2016/12/24"))
 
         (<h2> "Post-finalization note")
-        (<p> "This document, the associated implementation in generic-arrays.scm, and the test file test-arrays.scm includes a procedure "(<code>'array-assign!)" that is not in the SRFI as finalized on 2016/12/24.")
+        (<p> "This document, the associated implementation in generic-arrays.scm, and the test file test-arrays.scm includes a procedure "(<code>'array-assign!)" that is not in the SRFI as finalized on 2016/12/24.  It also has a corrected discussion of Haar transforms as examples of separable transforms.")
 
 	(<h2> "Abstract")
 	(<p> 
