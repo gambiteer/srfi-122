@@ -1,6 +1,6 @@
 ;;(declare (standard-bindings)(extended-bindings)(block)(not safe) (fixnum))
 (declare (inlining-limit 0))
-(define tests 10)
+(define tests 1000)
 
 (define-macro (test expr value)
   `(let* (;(ignore (pretty-print ',expr))
@@ -2374,74 +2374,86 @@
   (display "\nSecond-difference images in the direction $k\\times (1,-1)$, $k=1,2,...$, wherever they're defined:\n")
   (expose (all-second-differences image '#(1 -1))))
 
-(define (1D-Haar-loop a)
-  (let ((getter (array-getter a))
-	(setter (array-setter a))
-	(n (interval-upper-bound (array-domain a) 0)))
-    (do ((i 0 (fx+ i 2)))
-	((fx= i n))
-      (let* ((a_i   (getter i))
-	     (a_i+1 (getter (fx+ i 1)))
-	     (scaled-sum        (fl/ (fl+ a_i a_i+1) (flsqrt 2.0)))
-	     (scaled-difference (fl/ (fl- a_i a_i+1) (flsqrt 2.0))))
-	(setter scaled-sum i)
-	(setter scaled-difference (fx+ i 1))))))
-
-(define (1D-Haar-transform a)
-  ;; works only on specialized arrays with domains $[0, 2^k)$ for some $k$
-  (let ((n (interval-upper-bound (array-domain a) 0)))
-    (if (fx< 1 n)
-	(begin
-	  ;; calculate the scaled sums and differences
-	  (1D-Haar-loop a)
-	  ;; Apply the transform to the subarray of scaled sums
-	  (1D-Haar-transform (array-sample a '#(2)))))))
-
-(define (1D-Haar-inverse-transform a)
-  ;; works only on specialized arrays with domains $[0, 2^k)$ for some $k$
-  (let* ((n (interval-upper-bound (array-domain a) 0)))
-    (if (fx< 1 n)
-	(begin
-	  ;; Apply the inverse transform to get the array of scaled sums
-	  (1D-Haar-inverse-transform (array-sample a '#(2)))
-	  ;; reconstruct the array values from the scaled sums and differences
-	  (1D-Haar-loop a)))))
-
 (define (make-separable-transform 1D-transform)
-  (lambda (array)
-    ;; Works on arrays of any dimension.
+  (lambda (a)
     (let* ((n
-	    (array-dimension array))
+	    (array-dimension a))
 	   (permutation
 	    ;; we start with the identity permutation
 	    (let ((result (make-vector n)))
 	      (do ((i 0 (fx+ i 1)))
 		  ((fx= i n) result)
 		(vector-set! result i i)))))
-      ;; We apply the one-dimensional transform in each coordinate direction.
+      ;; We apply the one-dimensional transform to all pencils
+      ;; in each coordinate direction.
       (do ((d 0 (fx+ d 1)))
 	  ((fx= d n))
 	;; Swap the d'th and n-1'st coordinates
 	(vector-set! permutation (fx- n 1) d)
 	(vector-set! permutation d (fx- n 1))
-	;; Apply the transform in the d'th coordinate direction
-	;; to all \"pencils\" in that direction
 	;; array-permute re-orders the coordinates to put the
 	;; d'th coordinate at the end, array-curry returns
 	;; an $n-1$-dimensional array of one-dimensional subarrays,
 	;; and 1D-transform is applied to each of those
 	;; one-dimensional sub-arrays.
 	(array-for-each 1D-transform
-			(array-curry (array-permute array permutation)
-				     1))
+			(array-curry (array-permute a permutation) 1))
 	;; return the permutation to the identity
 	(vector-set! permutation d d)
 	(vector-set! permutation (fx- n 1) (fx- n 1))))))
 
+(define (recursively-apply-transform-and-downsample transform)
+  (lambda (a)
+    (let ((sample-vector (make-vector (array-dimension a) 2)))
+      (define (helper a)
+        (if (fx< 1 (interval-upper-bound (array-domain a) 0))
+            (begin
+              (transform a)
+              (helper (array-sample a sample-vector)))))
+      (helper a))))
+
+(define (recursively-downsample-and-apply-transform transform)
+  (lambda (a)
+    (let ((sample-vector (make-vector (array-dimension a) 2)))
+      (define (helper a)
+        (if (fx< 1 (interval-upper-bound (array-domain a) 0))
+            (begin
+              (helper (array-sample a sample-vector))
+              (transform a))))
+      (helper a))))
+
+(define (1D-Haar-loop a)
+  (let ((getter (array-getter a))
+	(setter (array-setter a))
+	(n (interval-upper-bound (array-domain a) 0)))
+    (do ((i 0 (fx+ i 2)))
+	((fx= i n))
+      (let* ((a_i               (getter i))
+	     (a_i+1             (getter (fx+ i 1)))
+	     (scaled-sum        (fl/ (fl+ a_i a_i+1) (flsqrt 2.0)))
+	     (scaled-difference (fl/ (fl- a_i a_i+1) (flsqrt 2.0))))
+	(setter scaled-sum i)
+	(setter scaled-difference (fx+ i 1))))))
+
+(define 1D-Haar-transform
+  (recursively-apply-transform-and-downsample 1D-Haar-loop))
+
+(define 1D-Haar-inverse-transform
+  (recursively-downsample-and-apply-transform 1D-Haar-loop))
+
 (define hyperbolic-Haar-transform
   (make-separable-transform 1D-Haar-transform))
+
 (define hyperbolic-Haar-inverse-transform
   (make-separable-transform 1D-Haar-inverse-transform))
+
+(define Haar-transform
+  (recursively-apply-transform-and-downsample
+   (make-separable-transform 1D-Haar-loop)))
+
+(define Haar-inverse-transform
+  (recursively-downsample-and-apply-transform
+   (make-separable-transform 1D-Haar-loop)))
 
 (let ((image
        (array->specialized-array
@@ -2463,70 +2475,6 @@
   (pretty-print (list (array-domain image)
 		      (array->list image))))
 
-(define (Haar-transform array)
-  ;; Works on arrays with domains [0,2^k)^n for any k, n
-  (let ((2^k (interval-upper-bound (array-domain array) 0)))
-    (if (fx< 1 2^k)
-        (let* ((n
-                (array-dimension array))
-               (permutation
-                ;; we start with the identity permutation
-                (let ((result (make-vector n)))
-                  (do ((i 0 (fx+ i 1)))
-                      ((fx= i n) result)
-                    (vector-set! result i i)))))
-          ;; We apply the Haar loop in each coordinate direction.
-          (do ((d 0 (fx+ d 1)))
-              ((fx= d n))
-            ;; Swap the d'th and n-1'st coordinates
-            (vector-set! permutation (fx- n 1) d)
-            (vector-set! permutation d (fx- n 1))
-            ;; array-permute re-orders the coordinates to put the
-            ;; d'th coordinate at the end, array-curry returns
-            ;; an $n-1$-dimensional array of one-dimensional subarrays,
-            ;; and 1D-Haar-loop is applied to each of those
-            ;; one-dimensional sub-arrays.
-            (array-for-each 1D-Haar-loop
-                            (array-curry (array-permute array permutation)
-                                         1))
-            ;; return the permutation to the identity
-            (vector-set! permutation d d)
-            (vector-set! permutation (fx- n 1) (fx- n 1)))
-          ;; Apply multidimensional Haar transform to array of pixel averages.
-          (Haar-transform (array-sample array (make-vector n 2)))))))
-
-(define (Haar-inverse-transform array)
-  ;; Works on arrays with domains [0,2^k)^n for any k, n
-  (let ((2^k (interval-upper-bound (array-domain array) 0)))
-    (if (fx< 1 2^k)
-        (let* ((n
-                (array-dimension array))
-               (permutation
-                ;; we start with the identity permutation
-                (let ((result (make-vector n)))
-                  (do ((i 0 (fx+ i 1)))
-                      ((fx= i n) result)
-                    (vector-set! result i i)))))
-          ;; Apply multidimensional inverse Haar transform
-          ;; to calculate array of pixel averages.
-          (Haar-inverse-transform (array-sample array (make-vector n 2)))
-          ;; We apply the Haar loop in each coordinate direction.
-          (do ((d 0 (fx+ d 1)))
-              ((fx= d n))
-            ;; Swap the d'th and n-1'st coordinates
-            (vector-set! permutation (fx- n 1) d)
-            (vector-set! permutation d (fx- n 1))
-            ;; array-permute re-orders the coordinates to put the
-            ;; d'th coordinate at the end, array-curry returns
-            ;; an $n-1$-dimensional array of one-dimensional subarrays,
-            ;; and 1D-Haar-loop is applied to each of those
-            ;; one-dimensional sub-arrays.
-            (array-for-each 1D-Haar-loop
-                            (array-curry (array-permute array permutation)
-                                         1))
-            ;; return the permutation to the identity
-            (vector-set! permutation d d)
-            (vector-set! permutation (fx- n 1) (fx- n 1)))))))
 
 (let ((image
        (array->specialized-array
