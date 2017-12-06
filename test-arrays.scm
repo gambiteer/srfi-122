@@ -1,6 +1,6 @@
 ;;(declare (standard-bindings)(extended-bindings)(block)(not safe) (fixnum))
 (declare (inlining-limit 0))
-(define tests 1000)
+(define tests 10)
 
 (define-macro (test expr value)
   `(let* (;(ignore (pretty-print ',expr))
@@ -2438,21 +2438,104 @@
 	(vector-set! permutation d d)
 	(vector-set! permutation (fx- n 1) (fx- n 1))))))
 
-(define Haar-transform
+(define hyperbolic-Haar-transform
   (make-separable-transform 1D-Haar-transform))
-(define Haar-inverse-transform
+(define hyperbolic-Haar-inverse-transform
   (make-separable-transform 1D-Haar-inverse-transform))
 
-(let* ((image
-        (array->specialized-array
-         (make-array (make-interval '#(0 0) '#(4 4))
-                     (lambda (i j)
-                       (if (fx< i 2) 1. -1.)))))
-       (image-copy (array->specialized-array image))
-       (mutable-image
-        (make-array (array-domain image-copy)
-                    (array-getter image-copy)
-                    (array-setter image-copy))))
+(let ((image
+       (array->specialized-array
+        (make-array (make-interval '#(0 0) '#(4 4))
+                    (lambda (i j)
+                      (case i
+                        ((0) 1.)
+                        ((1) -1.)
+                        (else 0.)))))))
+  (display "\nInitial image: \n")
+  (pretty-print (list (array-domain image)
+		      (array->list image)))
+  (hyperbolic-Haar-transform image)
+  (display "\nArray of hyperbolic Haar wavelet coefficients: \n")
+  (pretty-print (list (array-domain image)
+		      (array->list image)))
+  (hyperbolic-Haar-inverse-transform image)
+  (display "\nReconstructed image: \n")
+  (pretty-print (list (array-domain image)
+		      (array->list image))))
+
+(define (Haar-transform array)
+  ;; Works on arrays with domains [0,2^k)^n for any k, n
+  (let ((2^k (interval-upper-bound (array-domain array) 0)))
+    (if (fx< 1 2^k)
+        (let* ((n
+                (array-dimension array))
+               (permutation
+                ;; we start with the identity permutation
+                (let ((result (make-vector n)))
+                  (do ((i 0 (fx+ i 1)))
+                      ((fx= i n) result)
+                    (vector-set! result i i)))))
+          ;; We apply the Haar loop in each coordinate direction.
+          (do ((d 0 (fx+ d 1)))
+              ((fx= d n))
+            ;; Swap the d'th and n-1'st coordinates
+            (vector-set! permutation (fx- n 1) d)
+            (vector-set! permutation d (fx- n 1))
+            ;; array-permute re-orders the coordinates to put the
+            ;; d'th coordinate at the end, array-curry returns
+            ;; an $n-1$-dimensional array of one-dimensional subarrays,
+            ;; and 1D-Haar-loop is applied to each of those
+            ;; one-dimensional sub-arrays.
+            (array-for-each 1D-Haar-loop
+                            (array-curry (array-permute array permutation)
+                                         1))
+            ;; return the permutation to the identity
+            (vector-set! permutation d d)
+            (vector-set! permutation (fx- n 1) (fx- n 1)))
+          ;; Apply multidimensional Haar transform to array of pixel averages.
+          (Haar-transform (array-sample array (make-vector n 2)))))))
+
+(define (Haar-inverse-transform array)
+  ;; Works on arrays with domains [0,2^k)^n for any k, n
+  (let ((2^k (interval-upper-bound (array-domain array) 0)))
+    (if (fx< 1 2^k)
+        (let* ((n
+                (array-dimension array))
+               (permutation
+                ;; we start with the identity permutation
+                (let ((result (make-vector n)))
+                  (do ((i 0 (fx+ i 1)))
+                      ((fx= i n) result)
+                    (vector-set! result i i)))))
+          ;; Apply multidimensional inverse Haar transform
+          ;; to calculate array of pixel averages.
+          (Haar-inverse-transform (array-sample array (make-vector n 2)))
+          ;; We apply the Haar loop in each coordinate direction.
+          (do ((d 0 (fx+ d 1)))
+              ((fx= d n))
+            ;; Swap the d'th and n-1'st coordinates
+            (vector-set! permutation (fx- n 1) d)
+            (vector-set! permutation d (fx- n 1))
+            ;; array-permute re-orders the coordinates to put the
+            ;; d'th coordinate at the end, array-curry returns
+            ;; an $n-1$-dimensional array of one-dimensional subarrays,
+            ;; and 1D-Haar-loop is applied to each of those
+            ;; one-dimensional sub-arrays.
+            (array-for-each 1D-Haar-loop
+                            (array-curry (array-permute array permutation)
+                                         1))
+            ;; return the permutation to the identity
+            (vector-set! permutation d d)
+            (vector-set! permutation (fx- n 1) (fx- n 1)))))))
+
+(let ((image
+       (array->specialized-array
+        (make-array (make-interval '#(0 0) '#(4 4))
+                    (lambda (i j)
+                      (case i
+                        ((0) 1.)
+                        ((1) -1.)
+                        (else 0.)))))))
   (display "\nInitial image: \n")
   (pretty-print (list (array-domain image)
 		      (array->list image)))
@@ -2461,58 +2544,11 @@
   (pretty-print (list (array-domain image)
 		      (array->list image)))
   (Haar-inverse-transform image)
-  (display "\nArray reconstructed from Haar wavelet coefficients: \n")
+  (display "\nReconstructed image: \n")
   (pretty-print (list (array-domain image)
-		      (array->list image)))
-  (display "\nInitial image: \n")
-  (pretty-print (list (array-domain mutable-image)
-		      (array->list mutable-image)))
-  (Haar-transform mutable-image)
-  (display "\nArray of Haar wavelet coefficients: \n")
-  (pretty-print (list (array-domain mutable-image)
-		      (array->list mutable-image)))
-  (Haar-inverse-transform mutable-image)
-  (display "\nArray reconstructed from Haar wavelet coefficients: \n")
-  (pretty-print (list (array-domain mutable-image)
-		      (array->list mutable-image))))
+		      (array->list image))))
 
-;;; Some timings
-
-(pp "Timing generic storage class")
-
-(let* ((rows 1024)
-       (specialized-image
-        (array->specialized-array
-         (make-array (make-interval '#(0 0) (vector rows rows))
-                     (lambda (i j)
-                       (if (fx< (* 2 i) rows) 1. -1.)))))
-       (mutable-image
-        (make-array (array-domain specialized-image)
-                    (array-getter specialized-image)
-                    (array-setter specialized-image))))
-  (time (begin (Haar-transform specialized-image)
-               (Haar-inverse-transform specialized-image)))
-  (time (begin (Haar-transform mutable-image)
-               (Haar-inverse-transform mutable-image))))
-
-(pp "Timing f64 storage class")
-
-(let* ((rows 1024)
-       (specialized-image
-        (array->specialized-array
-         (make-array (make-interval '#(0 0) (vector rows rows))
-                     (lambda (i j)
-                       (if (fx< (* 2 i) rows) 1. -1.)))
-         f64-storage-class))
-       (mutable-image
-        (make-array (array-domain specialized-image)
-                    (array-getter specialized-image)
-                    (array-setter specialized-image))))
-  (time (begin (Haar-transform specialized-image)
-               (Haar-inverse-transform specialized-image)))
-  (time (begin (Haar-transform mutable-image)
-               (Haar-inverse-transform mutable-image))))
-
+ 
 (define A
   (array->specialized-array
    (make-array (make-interval '#(0 0)

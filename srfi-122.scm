@@ -1547,7 +1547,7 @@ Second-differences in the direction $k\\times (1,-1)$:
 
 
 
-(<p> (<b> "Separable operators. ")"Many multi-dimensional transforms in signal processing are "(<i> 'separable)", in that that the multi-dimensional transform can be computed by applying one-dimensional transforms in each of the coordinate directions.  Examples of such transforms include the Fast Fourier Transform and the Fast Wavelet Transform.  Each one-dimensional subdomain of the complete domain is called a "(<i> 'pencil)", and the same one-dimensional transform is applied to all pencils in a given direction. Given the one-dimensional array transform, one can compute the multidimensional transform as follows:")
+(<p> (<b> "Separable operators. ")"Many multi-dimensional transforms in signal processing are "(<i> 'separable)", in that that the multi-dimensional transform can be computed by applying one-dimensional transforms in each of the coordinate directions.  Examples of such transforms include the Fast Fourier Transform and the "(<a> href: "https://arxiv.org/abs/1210.1944" "Fast Hyperbolic Wavelet Transform")".  Each one-dimensional subdomain of the complete domain is called a "(<i> 'pencil)", and the same one-dimensional transform is applied to all pencils in a given direction. Given the one-dimensional array transform, one can compute the multidimensional transform as follows:")
 (<pre> (<code>"
 (define (make-separable-transform 1D-transform)
   (lambda (array)
@@ -1582,7 +1582,7 @@ Second-differences in the direction $k\\times (1,-1)$:
         (vector-set! permutation d d)
         (vector-set! permutation (fx- n 1) (fx- n 1))))))
  "))
-(<p> "We can test this by turning a one-dimensional Haar wavelet transform into a multi-dimensional Haar transform:")
+(<p> "We can test this by turning a one-dimensional Haar wavelet transform into a multi-dimensional hyperbolic Haar transform:")
 (<pre>
  (<code>"
 (define (1D-Haar-loop a)
@@ -1628,63 +1628,185 @@ Second-differences in the direction $k\\times (1,-1)$:
           ;; the scaled sums and differences
           (1D-Haar-loop a)))))
 
-(define Haar-transform
+(define hyperbolic-Haar-transform
   (make-separable-transform 1D-Haar-transform))
 
-(define Haar-inverse-transform
+(define hyperbolic-Haar-inverse-transform
   (make-separable-transform 1D-Haar-inverse-transform))
 " ))
-(<p> "We then define an image that is a multiple of a single, two-dimensional Haar wavelet, compute its transform (which should be nonzero for only a single Haar coefficient), and then the inverse transform:")
+(<p> "We then define an image that is a multiple of a single, two-dimensional hyperbolic Haar wavelet, compute its transform (which should be nonzero for only a single hyperbolic Haar coefficient), and then the inverse transform:")
 (<pre>
  (<code>"
 (let ((image
        (array->specialized-array
         (make-array (make-interval '#(0 0) '#(4 4))
                     (lambda (i j)
-                      (if (fx< i 2) 1. -1.))))))
-  (display \"\\nInitial image: \\n\")
+                      (case i
+                        ((0) 1.)
+                        ((1) -1.)
+                        (else 0.)))))))
+  (display \"\nInitial image: \n\")
   (pretty-print (list (array-domain image)
-                      (array->list image)))
-  (Haar-transform image)
-  (display \"\\nArray of Haar wavelet coefficients: \\n\")
+		      (array->list image)))
+  (hyperbolic-Haar-transform image)
+  (display \"\\nArray of hyperbolic Haar wavelet coefficients: \\n\")
   (pretty-print (list (array-domain image)
-                      (array->list image)))
-  (Haar-inverse-transform image)
+		      (array->list image)))
+  (hyperbolic-Haar-inverse-transform image)
   (display \"\\nReconstructed image: \\n\")
   (pretty-print (list (array-domain image)
-                      (array->list image))))
+		      (array->list image))))
 "))
 (<p> "This yields: ")
 (<pre>"
 Initial image: 
 (#<##interval #11 lower-bounds: #(0 0) upper-bounds: #(4 4)> 
- (1. 1. 1. 1. 1. 1. 1. 1. -1. -1. -1. -1. -1. -1. -1. -1.))
+ (1. 1. 1. 1. -1. -1. -1. -1. 0. 0. 0. 0. 0. 0. 0. 0.))
 
-Array of Haar wavelet coefficients: 
-(#<##interval #11 lower-bounds: #(0 0) upper-bounds: #(4 4)>
- (0. 0. 0. 0. 0. 0. 0. 0. 3.9999999999999987
-  0. 0. 0. 0. 0. 0. 0.))
+Array of hyperbolic Haar wavelet coefficients: 
+(#<##interval #11 lower-bounds: #(0 0) upper-bounds: #(4 4)> 
+ (0. 0. 0. 0. 2.8284271247461894 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.))
 
 Reconstructed image: 
 (#<##interval #11 lower-bounds: #(0 0) upper-bounds: #(4 4)>
- (.9999999999999993
-  .9999999999999993
-  .9999999999999993
-  .9999999999999993
-  .9999999999999993
-  .9999999999999993
-  .9999999999999993
-  .9999999999999993
-  -.9999999999999993
-  -.9999999999999993
-  -.9999999999999993
-  -.9999999999999993
-  -.9999999999999993
-  -.9999999999999993
-  -.9999999999999993
-  -.9999999999999993))
+ (.9999999999999996
+  .9999999999999996
+  .9999999999999996
+  .9999999999999996
+  -.9999999999999996
+  -.9999999999999996
+  -.9999999999999996
+  -.9999999999999996
+  0.
+  0.
+  0.
+  0.
+  0.
+  0.
+  0.
+  0.))
 " )
-(<p> "In perfect arithmetic, this Haar transform is "(<i>'orthonormal)", in that the sum of the squares of the elements of the image is the same as the sum of the squares of the Haar coefficients of the image.  We can see that this is approximately true here.")
+(<p> "In perfect arithmetic, this hyperbolic Haar transform is "(<i>'orthonormal)", in that the sum of the squares of the elements of the image is the same as the sum of the squares of the hyperbolic Haar coefficients of the image.  We can see that this is approximately true here.")
+
+(<p> (<b> "Multi-dimensional Haar transform. ")"The specific structure of the multi-dimensional Haar transform means that it is not precisely separable, but we can define it in terms of "(<code> "1D-Haar-loop")" as follows: ")
+(<pre>"
+(define (Haar-transform array)
+  ;; Works on arrays with domains [0,2^k)^n for any k, n
+  (let ((2^k (interval-upper-bound (array-domain array) 0)))
+    (if (fx< 1 2^k)
+        (let* ((n
+                (array-dimension array))
+               (permutation
+                ;; we start with the identity permutation
+                (let ((result (make-vector n)))
+                  (do ((i 0 (fx+ i 1)))
+                      ((fx= i n) result)
+                    (vector-set! result i i)))))
+          ;; We apply the Haar loop in each coordinate direction.
+          (do ((d 0 (fx+ d 1)))
+              ((fx= d n))
+            ;; Swap the d'th and n-1'st coordinates
+            (vector-set! permutation (fx- n 1) d)
+            (vector-set! permutation d (fx- n 1))
+            ;; array-permute re-orders the coordinates to put the
+            ;; d'th coordinate at the end, array-curry returns
+            ;; an $n-1$-dimensional array of one-dimensional subarrays,
+            ;; and 1D-Haar-loop is applied to each of those
+            ;; one-dimensional sub-arrays.
+            (array-for-each 1D-Haar-loop
+                            (array-curry (array-permute array permutation)
+                                         1))
+            ;; return the permutation to the identity
+            (vector-set! permutation d d)
+            (vector-set! permutation (fx- n 1) (fx- n 1)))
+          ;; Apply multidimensional Haar transform to array of pixel averages.
+          (Haar-transform (array-sample array (make-vector n 2)))))))
+
+(define (Haar-inverse-transform array)
+  ;; Works on arrays with domains [0,2^k)^n for any k, n
+  (let ((2^k (interval-upper-bound (array-domain array) 0)))
+    (if (fx< 1 2^k)
+        (let* ((n
+                (array-dimension array))
+               (permutation
+                ;; we start with the identity permutation
+                (let ((result (make-vector n)))
+                  (do ((i 0 (fx+ i 1)))
+                      ((fx= i n) result)
+                    (vector-set! result i i)))))
+          ;; Apply multidimensional inverse Haar transform
+          ;; to calculate array of pixel averages.
+          (Haar-inverse-transform (array-sample array (make-vector n 2)))
+          ;; We apply the Haar loop in each coordinate direction.
+          (do ((d 0 (fx+ d 1)))
+              ((fx= d n))
+            ;; Swap the d'th and n-1'st coordinates
+            (vector-set! permutation (fx- n 1) d)
+            (vector-set! permutation d (fx- n 1))
+            ;; array-permute re-orders the coordinates to put the
+            ;; d'th coordinate at the end, array-curry returns
+            ;; an $n-1$-dimensional array of one-dimensional subarrays,
+            ;; and 1D-Haar-loop is applied to each of those
+            ;; one-dimensional sub-arrays.
+            (array-for-each 1D-Haar-loop
+                            (array-curry (array-permute array permutation)
+                                         1))
+            ;; return the permutation to the identity
+            (vector-set! permutation d d)
+            (vector-set! permutation (fx- n 1) (fx- n 1)))))))
+")
+(<p> "We can apply the Haar transform to the same image as in the \"Separable transform\" example as follows: ")
+(<pre>"
+ (let ((image
+       (array->specialized-array
+        (make-array (make-interval '#(0 0) '#(4 4))
+                    (lambda (i j)
+                      (case i
+                        ((0) 1.)
+                        ((1) -1.)
+                        (else 0.)))))))
+  (display \"\\nInitial image: \\n\")
+  (pretty-print (list (array-domain image)
+		      (array->list image)))
+  (Haar-transform image)
+  (display \"\\nArray of Haar wavelet coefficients: \\n\")
+  (pretty-print (list (array-domain image)
+		      (array->list image)))
+  (Haar-inverse-transform image)
+  (display \"\\nReconstructed image: \\n\")
+  (pretty-print (list (array-domain image)
+		      (array->list image))))
+")
+(<p> "This yields: ")
+(<pre>"
+Initial image: 
+(#<##interval #12 lower-bounds: #(0 0) upper-bounds: #(4 4)> 
+ (1. 1. 1. 1. -1. -1. -1. -1. 0. 0. 0. 0. 0. 0. 0. 0.))
+
+Array of Haar wavelet coefficients: 
+(#<##interval #12 lower-bounds: #(0 0) upper-bounds: #(4 4)>
+ (0. 0. 0. 0. 1.9999999999999998 0. 1.9999999999999998 0. 0. 0. 0. 0. 0. 0. 0. 0.))
+
+Reconstructed image: 
+(#<##interval #12 lower-bounds: #(0 0) upper-bounds: #(4 4)>
+ (.9999999999999997
+  .9999999999999997
+  .9999999999999997
+  .9999999999999997
+  -.9999999999999997
+  -.9999999999999997
+  -.9999999999999997
+  -.9999999999999997
+  0.
+  0.
+  0.
+  0.
+  0.
+  0.
+  0.
+  0.))
+")
+(<p> "You see in this example that this particular image has two, not one, nonzero coefficients in the two-dimensional Haar transform, which is again orthonormal.")
 
 (<p> (<b> "Gaussian elimination. ")"Given a square matrix $A$ we can overwrite $A$ with lower-triangular matrix $L$ with ones on the diagonal and upper-triangular
 matrix $U$ so that $A=LU$ as follows. (We assume \"pivoting\" isn't needed.) For example, if "
