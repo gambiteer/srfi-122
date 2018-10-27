@@ -37,7 +37,11 @@
       <li>Draft #15 published: 2016/12/15</li>
       <li>Finalized: 2016/12/24</li></ul>
     <h2>Post-finalization note</h2>
-    <p>This document, the associated implementation in generic-arrays.scm, and the test file test-arrays.scm includes a procedure <code>array-assign!</code> that is not in the SRFI as finalized on 2016/12/24.  It also has a corrected discussion of Haar transforms as examples of separable transforms.</p>
+    <p>This document, the associated implementation in generic-arrays.scm, and the test file test-arrays.scm differ from the finalized SRFI-122 in the following ways:</p>
+    <ul>
+      <li>The procedures <code>interval-cartesian-product</code>, <code>array-outer-product</code>, and <code>array-assign!</code> have been added.</li>
+      <li>The discussion of Haar transforms as examples of separable transforms has been corrected.</li>
+      <li>The sample procedure <code>LU-decomposition</code> has been added to this document and test-arrays.scm.</li></ul>
     <h2>Abstract</h2>
     <p>This SRFI specifies an array mechanism for Scheme. Arrays as defined here are quite general; at their most basic, an array is simply a mapping, or function, from multi-indices of exact integers $i_0,\ldots,i_{d-1}$ to Scheme values.  The set of multi-indices $i_0,\ldots,i_{d-1}$ that are valid for a given array form the <i>domain</i> of the array.  In this SRFI, each array's domain consists  of a rectangular interval $[l_0,u_0)\times[l_1,u_1)\times\cdots\times[l_{d-1},u_{d-1})$, a subset of $\mathbb Z^d$, $d$-tuples of integers.  Thus, we introduce a data type called <i>intervals</i>, which encapsulate the cross product of nonempty intervals of exact integers. Specialized variants of arrays are specified to provide portable programs with efficient representations for common use cases.</p>
     <h2>Overview</h2>
@@ -121,7 +125,8 @@
         <a href="#interval-intersect">interval-intersect</a>,
         <a href="#interval-translate">interval-translate</a>,
         <a href="#interval-permute">interval-permute</a>,
-        <a href="#interval-scale">interval-scale</a>.</dd>
+        <a href="#interval-scale">interval-scale</a>,
+        <a href="#interval-cartesian-product">interval-cartesian-product</a>.</dd>
       <dt>Storage Classes</dt>
       <dd><a href="#make-storage-class">make-storage-class</a>,
         <a href="#storage-class?">storage-class?</a>,
@@ -168,6 +173,7 @@
         <a href="#array-permute">array-permute</a>,
         <a href="#array-reverse">array-reverse</a>,
         <a href="#array-sample">array-sample</a>,
+        <a href="#array-outer-product">array-outer-product</a>,
         <a href="#array-map">array-map</a>,
         <a href="#array-for-each">array-for-each</a>,
         <a href="#array-fold">array-fold</a>,
@@ -355,6 +361,12 @@
     <p><b>Procedure: </b><code><a name="interval-scale">interval-scale</a> <var>interval</var> <var>scales</var></code></p>
     <p>If <code><var>interval</var></code> is a $d$-dimensional interval $[0,u_1)\times\cdots\times[0,u_{d-1})$ with all lower bounds zero, and <code><var>scales</var></code> is a length-$d$ vector of positive exact integers, which we'll denote by $\vec s$, then <code>interval-scale</code> returns the interval $[0,\operatorname{ceiling}(u_1/s_1))\times\cdots\times[0,\operatorname{ceiling}(u_{d-1}/s_{d-1})$.</p>
     <p>It is an error if  <code><var>interval</var></code> and <code><var>scales</var></code> do not satisfy this condition.</p>
+    <p><b>Procedure: </b><code><a name="interval-cartesian-product">interval-cartesian-product</a> <var>interval</var> . <var>intervals</var></code></p>
+    <p>Implements the Cartesian product of the intervals in <code>(cons <var>interval</var> <var>intervals</var>)</code>. Returns</p>
+    <pre><code>
+(make-interval (list-&gt;vector (apply append (map array-lower-bounds-&gt;list (cons interval intervals))))
+               (list-&gt;vector (apply append (map array-upper-bounds-&gt;list (cons interval intervals)))))</code></pre>
+    <p>It is an error if any argument is not an interval.</p>
     <h2>Storage classes</h2>
     <p>Conceptually, a storage-class is a set of functions to manage the backing store of a specialized-array.
       The functions allow one to make a backing store, to get values from the store and to set new values, to return the length of the store, and to specify a default value for initial elements of the backing store.  Typically, a backing store is a (heterogeneous or homogeneous) vector.  A storage-class has a type distinct from other Scheme types.</p>
@@ -880,6 +892,16 @@ indexer:       (lambda multi-index
    (apply (array-getter <code><var>array</var></code>)
           (map * multi-index (vector-&gt;list <code><var>scales</var></code>)))))</code></pre>
     <p>It is an error if <code><var>array</var></code> and <code><var>scales</var></code> don't satisfy these requirements.</p>
+    <p><b>Procedure: </b><code><a name="array-outer-product">array-outer-product</a> <var>op</var> <var>array1</var> <var>array2</var></code></p>
+    <p>Implements the outer product of <code><var>array1</var></code> and <code><var>array2</var></code> with the operator <code><var>op</var></code>, similar to the APL function with the same name.</p>
+    <p>Assume that <code><var>array1</var></code> and <code><var>array2</var></code> are arrays and that <code><var>op</var></code> is a function of two arguments. Assume that <code>(list-tail l n)</code> returns the list remaining after the first <code><var>n</var></code> items of the list <code><var>l</var></code> have been removed, and <code>(list-take l n)</code> returns a new list consisting of the first <code><var>n</var></code> items of the list <code><var>l</var></code>. Then <code><var>array-outer-product</var></code> returns the immutable array</p>
+    <pre><code>
+(make-array (interval-cartesian-product (array-domain array1)
+                                        (array-domain array2))
+            (lambda args
+              (op (apply (array-getter array1) (list-take args (array-dimension array1)))
+                  (apply (array-getter array2) (list-tail args (array-dimension array1))))))</code></pre>
+    <p>This operation can be considered a partial inverse to <code>array-curry</code>.  It is an error if the arguments do not satisfy these assumptions.</p>
     <p><b>Procedure: </b><code><a name="array-map">array-map</a> <var>f</var> <var>array</var> . <var>arrays</var></code></p>
     <p>If <code><var>array</var></code>, <code>(car <var>arrays</var>)</code>, ... all have the same domain and <code><var>f</var></code> is a procedure, then <code>array-map</code>
       returns a new array with the same domain and getter</p>
@@ -1418,7 +1440,8 @@ Reconstructed image:
       matrix $U$ so that $A=LU$ as follows. (We assume &quot;pivoting&quot; isn't needed.) For example, if $$A=\begin{pmatrix} a_{11}&amp;a_{12}&amp;a_{13}\\ a_{21}&amp;a_{22}&amp;a_{23}\\ a_{31}&amp;a_{32}&amp;a_{33}\end{pmatrix}=\begin{pmatrix} 1&amp;0&amp;0\\ \ell_{21}&amp;1&amp;0\\ \ell_{31}&amp;\ell_{32}&amp;1\end{pmatrix}\begin{pmatrix} u_{11}&amp;u_{12}&amp;u_{13}\\ 0&amp;u_{22}&amp;u_{23}\\ 0&amp;0&amp;u_{33}\end{pmatrix}$$ then $A$ is overwritten with
       $$
       \begin{pmatrix} u_{11}&amp;u_{12}&amp;u_{13}\\ \ell_{21}&amp;u_{22}&amp;u_{23}\\ \ell_{31}&amp;\ell_{32}&amp;u_{33}\end{pmatrix}.
-      $$</p>
+      $$
+      The code uses <code>array-assign!</code>, <code>specialized-array-share</code>, <code>array-extract</code>, and <code>array-outer-product</code>.</p>
     <pre><code>
 (define (LU-decomposition A)
   ;; Assumes the domain of A is [0,n)\times [0,n)
@@ -1432,12 +1455,23 @@ Reconstructed image:
         ((= i (fx- n 1)) A)
       (let* ((pivot
               (getter i i))
+             (column/row-domain
+              ;; both will be one-dimensional
+              (make-interval (vector (+ i 1))
+                             (vector n)))
              (column
               ;; the column below the (i,i) entry
-              (array-extract
-               A (make-interval
-                  (vector (fx+ i 1) i)
-                  (vector n         (fx+ i 1)))))
+              (specialized-array-share A
+                                       column/row-domain
+                                       (lambda (k)
+                                         (values k i))))
+             (row
+              ;; the row to the right of the (i,i) entry
+              (specialized-array-share A
+                                       column/row-domain
+                                       (lambda (j)
+                                         (values i j))))
+
              ;; the subarray to the right and
              ;;below the (i,i) entry
              (subarray
@@ -1457,11 +1491,7 @@ Reconstructed image:
          subarray
          (array-map -
                     subarray
-                    (make-array
-                     (array-domain subarray)
-                     (lambda (l m)
-                       (* (getter l i)
-                          (getter i m))))))))))
+                    (array-outer-product * column row)))))))
 
 (define A
   (array-&gt;specialized-array
@@ -1514,7 +1544,7 @@ Reconstructed image:
       <li><a name="SRFI-58" href="http://srfi.schemers.org/srfi-58/">SRFI 58: Array Notation</a>, by Aubrey Jaffer.</li>
       <li><a name="SRFI-63" href="http://srfi.schemers.org/srfi-63/">SRFI 63: Homogeneous and Heterogeneous Arrays</a>, by Aubrey Jaffer.</li></ol>
     <h2>Copyright</h2>
-    <p>&copy; 2016 Bradley J Lucier. All Rights Reserved.</p>
+    <p>&copy; 2016, 2018 Bradley J Lucier. All Rights Reserved.</p>
     <p>Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the &quot;Software&quot;), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions: </p>
     <p>The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.</p>
     <p> THE SOFTWARE IS PROVIDED &quot;AS IS&quot;, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.

@@ -78,7 +78,11 @@ MathJax.Hub.Config({
 	      (<li> "Finalized: 2016/12/24"))
 
         (<h2> "Post-finalization note")
-        (<p> "This document, the associated implementation in generic-arrays.scm, and the test file test-arrays.scm includes a procedure "(<code>'array-assign!)" that is not in the SRFI as finalized on 2016/12/24.  It also has a corrected discussion of Haar transforms as examples of separable transforms.")
+        (<p> "This document, the associated implementation in generic-arrays.scm, and the test file test-arrays.scm differ from the finalized SRFI-122 in the following ways:")
+        (<ul>
+         (<li> "The procedures "(<code>'interval-cartesian-product)", "(<code>'array-outer-product)", and "(<code>'array-assign!)" have been added.")
+         (<li> "The discussion of Haar transforms as examples of separable transforms has been corrected.")
+         (<li> "The sample procedure "(<code>'LU-decomposition)" has been added to this document and test-arrays.scm."))
 
 	(<h2> "Abstract")
 	(<p> 
@@ -252,7 +256,8 @@ they may have hash tables or databases behind an implementation, one may read th
                  (<a> href: "#interval-intersect" "interval-intersect")END
                  (<a> href: "#interval-translate" "interval-translate")END
                  (<a> href: "#interval-permute" "interval-permute") END
-                 (<a> href: "#interval-scale" "interval-scale")
+                 (<a> href: "#interval-scale" "interval-scale") END
+                 (<a> href: "#interval-cartesian-product" "interval-cartesian-product")
                  ".")
            (<dt> "Storage Classes")
            (<dd> (<a> href: "#make-storage-class" "make-storage-class") END
@@ -301,6 +306,7 @@ they may have hash tables or databases behind an implementation, one may read th
                  (<a> href: "#array-permute" "array-permute")END
                  (<a> href: "#array-reverse" "array-reverse")END
                  (<a> href: "#array-sample" "array-sample")END
+                 (<a> href: "#array-outer-product" "array-outer-product") END
                  (<a> href: "#array-map" "array-map")END
                  (<a> href: "#array-for-each" "array-for-each")END
                  (<a> href: "#array-fold" "array-fold")END
@@ -536,6 +542,19 @@ the representation of $[0,16)\\times [0,4)\\times[0,8)\\times[0,21)$.")
      "and "(<code>(<var>'scales))" is a length-$d$ vector of positive exact integers, which we'll denote by $\\vec s$, then "(<code>'interval-scale)
      " returns the interval $[0,\\operatorname{ceiling}(u_1/s_1))\\times\\cdots\\times[0,\\operatorname{ceiling}(u_{d-1}/s_{d-1})$.")
 (<p> "It is an error if  "(<code>(<var>'interval))" and "(<code>(<var>'scales))" do not satisfy this condition.")
+
+(format-lambda-list '(interval-cartesian-product interval #\. intervals))
+(<p> "Implements the Cartesian product of the intervals in "
+     (<code>
+      "(cons "
+      (<var>'interval)
+      " "
+      (<var>'intervals)
+      ")")". Returns")
+(<pre>(<code>"
+(make-interval (list->vector (apply append (map array-lower-bounds->list (cons interval intervals))))
+               (list->vector (apply append (map array-upper-bounds->list (cons interval intervals)))))"))
+(<p> "It is an error if any argument is not an interval.")
 
 (<h2> "Storage classes")
 (<p> "Conceptually, a storage-class is a set of functions to manage the backing store of a specialized-array.
@@ -1174,6 +1193,19 @@ a mutable-array, then "(<code>'array-permute)" returns the new mutable")
           (map * multi-index (vector->list "(<code>(<var>'scales))")))))"))
 (<p> "It is an error if "(<code>(<var>'array))" and "(<code>(<var>'scales))" don't satisfy these requirements.")
 
+(format-lambda-list '(array-outer-product op array1 array2))
+(<p> "Implements the outer product of "(<code>(<var>'array1))" and "(<code>(<var>'array2))" with the operator "(<code>(<var>'op))", similar to the APL function with the same name.")
+(<p> "Assume that "(<code>(<var>'array1))" and "(<code>(<var>'array2))" are arrays and that "(<code>(<var>'op))" is a function of two arguments. Assume that "
+     (<code>"(list-tail l n)")" returns the list remaining after the first "(<code>(<var>'n))" items of the list "(<code>(<var>'l))" have been removed, and "
+     (<code>"(list-take l n)")" returns a new list consisting of the first "(<code>(<var>'n))" items of the list "(<code>(<var>'l))". Then "(<code>(<var>'array-outer-product))" returns the immutable array")
+(<pre>(<code>"
+(make-array (interval-cartesian-product (array-domain array1)
+                                        (array-domain array2))
+            (lambda args
+              (op (apply (array-getter array1) (list-take args (array-dimension array1)))
+                  (apply (array-getter array2) (list-tail args (array-dimension array1))))))"))
+(<p> "This operation can be considered a partial inverse to "(<code>'array-curry)".  It is an error if the arguments do not satisfy these assumptions.")
+
 (format-lambda-list '(array-map f array #\. arrays))
 (<p> "If "(<code>(<var> 'array))", "(<code>"(car "(<var> 'arrays)")")", ... all have the same domain and "(<code>(<var> 'f))" is a procedure, then "(<code> 'array-map)"
 returns a new array with the same domain and getter")
@@ -1751,7 +1783,8 @@ matrix $U$ so that $A=LU$ as follows. (We assume \"pivoting\" isn't needed.) For
      "$$A=\\begin{pmatrix} a_{11}&a_{12}&a_{13}\\\\ a_{21}&a_{22}&a_{23}\\\\ a_{31}&a_{32}&a_{33}\\end{pmatrix}=\\begin{pmatrix} 1&0&0\\\\ \\ell_{21}&1&0\\\\ \\ell_{31}&\\ell_{32}&1\\end{pmatrix}\\begin{pmatrix} u_{11}&u_{12}&u_{13}\\\\ 0&u_{22}&u_{23}\\\\ 0&0&u_{33}\\end{pmatrix}$$ then $A$ is overwritten with
 $$
 \\begin{pmatrix} u_{11}&u_{12}&u_{13}\\\\ \\ell_{21}&u_{22}&u_{23}\\\\ \\ell_{31}&\\ell_{32}&u_{33}\\end{pmatrix}.
-$$")
+$$
+The code uses "(<code>'array-assign!)", "(<code>'specialized-array-share)", "(<code>'array-extract)", and "(<code>'array-outer-product)".")
 (<pre>
  (<code>"
 (define (LU-decomposition A)
@@ -1766,12 +1799,23 @@ $$")
         ((= i (fx- n 1)) A)
       (let* ((pivot
               (getter i i))
+             (column/row-domain
+              ;; both will be one-dimensional
+              (make-interval (vector (+ i 1))
+                             (vector n)))
              (column
               ;; the column below the (i,i) entry
-              (array-extract
-               A (make-interval
-                  (vector (fx+ i 1) i)
-                  (vector n         (fx+ i 1)))))
+              (specialized-array-share A
+                                       column/row-domain
+                                       (lambda (k)
+                                         (values k i))))
+             (row
+              ;; the row to the right of the (i,i) entry
+              (specialized-array-share A
+                                       column/row-domain
+                                       (lambda (j)
+                                         (values i j))))
+
              ;; the subarray to the right and
              ;;below the (i,i) entry
              (subarray
@@ -1791,11 +1835,7 @@ $$")
          subarray
          (array-map -
                     subarray
-                    (make-array
-                     (array-domain subarray)
-                     (lambda (l m)
-                       (* (getter l i)
-                          (getter i m))))))))))
+                    (array-outer-product * column row)))))))
 
 (define A
   (array->specialized-array
@@ -1853,7 +1893,7 @@ $$")
  (<li> (<a> name: 'SRFI-58 href: "http://srfi.schemers.org/srfi-58/" "SRFI 58: Array Notation")", by Aubrey Jaffer.")
  (<li> (<a> name: 'SRFI-63 href: "http://srfi.schemers.org/srfi-63/" "SRFI 63: Homogeneous and Heterogeneous Arrays")", by Aubrey Jaffer."))
 (<h2> "Copyright")
-(<p> (<unprotected> "&copy;")" 2016 Bradley J Lucier. All Rights Reserved.")
+(<p> (<unprotected> "&copy;")" 2016, 2018 Bradley J Lucier. All Rights Reserved.")
 (<p> "Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the \"Software\"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions: ")
 (<p> "The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.")
 (<p> " THE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.

@@ -3,7 +3,7 @@
 (declare (standard-bindings)
          (extended-bindings)
          (block)
-         (fixnum)
+         (mostly-fixnum)
          (not safe))
 
 ;;; The following macro is used to determine whether certain keyword arguments
@@ -84,6 +84,22 @@
 	 (map2 f vec vec2))
 	(else ; punt
 	 (list->vector (apply map f (map vector->list (cons vec (cons vec2 vecs))))))))
+
+(define (##vector-append*  vecs)
+  (let ((lens (map vector-length vecs)))
+    (let ((result (make-vector (apply + lens))))
+      (let outer ((vecs vecs) (lens lens) (i 0))
+        (if (null? vecs)
+            result
+            (let ((vec (car vecs))
+                  (len (car lens)))
+              (let inner ((i i) (j 0))
+                (if (fx= j len)
+                    (outer (cdr vecs) (cdr lens) i)
+                    (begin
+                      (vector-set! result i (vector-ref vec j))
+                      (inner (fx+ i 1) (fx+ j 1)))))))))))
+                    
 
 (declare (inline))
 
@@ -323,26 +339,36 @@
         (else
          (##interval-scale interval scales))))
 
+(define (##interval-cartesian-product intervals)
+  (make-##interval (##vector-append* (map ##interval-lower-bounds intervals))
+                   (##vector-append* (map ##interval-upper-bounds intervals))))
+
+(define (interval-cartesian-product interval . intervals)
+  (let ((intervals (cons interval intervals)))
+    (cond ((not (##every interval? intervals))
+           (apply error "interval-cartesian-product: Not all arguments are intervals: " intervals))
+          (else
+           (##interval-cartesian-product intervals)))))
+
 (define (interval-dilate interval lower-diffs upper-diffs)
   (cond ((not (interval? interval))
-	 (error "interval-dilate: first argument is not an interval: " interval lower-diffs upper-diffs))
-	((not (vector? lower-diffs))
-	 (error "interval-dilate: second argument must be a vector: " interval lower-diffs upper-diffs))
-	((not (vector? upper-diffs))
-	 (error "interval-dilate: third argument must be a vector: " interval lower-diffs upper-diffs))
+	 (error "interval-dilate: The first argument is not an interval: " interval lower-diffs upper-diffs))
+	((not (and (vector? lower-diffs)
+                   (##vector-every ##exact-integer? lower-diffs)))
+	 (error "interval-dilate: The second argument is not a vector of exact integers: " interval lower-diffs upper-diffs))
+	((not (and (vector? upper-diffs)
+                   (##vector-every ##exact-integer? upper-diffs)))
+	 (error "interval-dilate: The third argument is not a vector of exact integers: " interval lower-diffs upper-diffs))
 	((not (= (vector-length lower-diffs)
 		 (vector-length upper-diffs)
 		 (##interval-dimension interval)))
 	 (error "interval-dilate: The second and third arguments must have the same length as the dimension of the first argument: " interval lower-diffs upper-diffs))
-	((not (and (##vector-every ##exact-integer? lower-diffs)
-		   (##vector-every ##exact-integer? upper-diffs)))
-	 (error "interval-dilate: The second and third arguments must contain only exact integers: " interval lower-diffs upper-diffs))
 	(else
 	 (let ((new-lower-bounds (##vector-map + (##interval-lower-bounds interval) lower-diffs))
 	       (new-upper-bounds (##vector-map + (##interval-upper-bounds interval) upper-diffs)))
 	   (if (##vector-every < new-lower-bounds new-upper-bounds)
 	       (make-##interval new-lower-bounds new-upper-bounds)
-	       (error "interval-dilate: the resulting interval is empty: " interval lower-diffs upper-diffs))))))
+	       (error "interval-dilate: The resulting interval is empty: " interval lower-diffs upper-diffs))))))
 
 (define (##interval-volume interval)
   (do ((i (- (##interval-dimension interval) 1) (- i 1))
@@ -1893,12 +1919,12 @@
 
 (define (array-translate array translation)
   (cond ((not (array? array))
-	 (error "array-translate: the first argument is not an array: " array translation))
+	 (error "array-translate: The first argument is not an array: " array translation))
 	((not (translation? translation))
-	 (error "array-translate: the second argument is not a vector of exact integers: " array translation))
+	 (error "array-translate: The second argument is not a vector of exact integers: " array translation))
 	((not (fx= (array-dimension array)
 		   (vector-length translation)))
-	 (error "array-translate: the dimension of the first argument (an array) does not equal the dimension of the second argument (a vector): " array translation))
+	 (error "array-translate: The dimension of the first argument (an array) does not equal the dimension of the second argument (a vector): " array translation))
 	((specialized-array? array)
 	 (##specialized-array-translate array translation))
 	((mutable-array? array)
@@ -1988,12 +2014,12 @@
 
 (define (array-permute array permutation)
   (cond ((not (array? array))
-	 (error "array-permute: the first argument is not an array: " array permutation))
+	 (error "array-permute: The first argument is not an array: " array permutation))
 	((not (permutation? permutation))
-	 (error "array-permute: the second argument is not a permutation: " array permutation))
+	 (error "array-permute: The second argument is not a permutation: " array permutation))
 	((not (fx= (array-dimension array)
 		   (vector-length permutation)))
-	 (error "array-permute: the dimension of the first argument (an array) does not equal the dimension of the second argument (a permutation): " array permutation))
+	 (error "array-permute: The dimension of the first argument (an array) does not equal the dimension of the second argument (a permutation): " array permutation))
 	((specialized-array? array)
 	 (##specialized-array-permute array permutation))
 	((mutable-array? array)
@@ -2101,13 +2127,13 @@
 
 (define (array-reverse array flip?)
   (cond ((not (array? array))
-	 (error "array-reverse: the first argument is not an array: " array flip?))
+	 (error "array-reverse: The first argument is not an array: " array flip?))
 	((not (and (vector? flip?)
 		   (##vector-every boolean? flip?)))
-	 (error "array-reverse: the second argument is not a vector of booleans: " array flip?))
+	 (error "array-reverse: The second argument is not a vector of booleans: " array flip?))
 	((not (fx= (array-dimension array)
 		   (vector-length flip?)))
-	 (error "array-reverse: the dimension of the first argument (an array) does not equal the dimension of the second argument (a vector of booleans): " array flip?))
+	 (error "array-reverse: The dimension of the first argument (an array) does not equal the dimension of the second argument (a vector of booleans): " array flip?))
 	((specialized-array? array)
 	 (##specialized-array-reverse array flip?))
 	((mutable-array? array)
@@ -2259,6 +2285,85 @@
          (##mutable-array-sample array scales))
         (else
          (##immutable-array-sample array scales))))
+
+(define (##array-outer-product combiner array1 array2)
+
+  (define (list-take l n)
+    (if (fxzero? n)
+        '()
+        (cons (car l)
+              (list-take (cdr l)
+                         (fx- n 1)))))
+  
+  (let* ((domain1 (array-domain array1))
+         (domain2 (array-domain array2))
+         (getter1 (array-getter array1))
+         (getter2 (array-getter array2))
+         (dimension1
+          (interval-dimension domain1))
+         (dimension2
+          (interval-dimension domain2))
+         (result-domain
+          (##interval-cartesian-product (list domain1 domain2)))
+         (result-getter
+          (case dimension1
+            ((1)
+             (case dimension2
+               ((1)
+                (lambda (i1 i2)
+                  (combiner (getter1 i1)
+                            (getter2 i2))))
+               ((2)
+                (lambda (i1 i2 j2)
+                  (combiner (getter1 i1)
+                            (getter2 i2 j2))))
+               ((3)
+                (lambda (i1 i2 j2 k2)
+                  (combiner (getter1 i1)
+                            (getter2 i2 j2 k2))))
+               (else
+                (lambda (i1 . rest)
+                  (combiner (getter1 i1)
+                            (apply getter2 rest))))))
+            ((2)
+             (case dimension2
+               ((1)
+                (lambda (i1 j1 i2)
+                  (combiner (getter1 i1 j1)
+                            (getter2 i2))))
+               ((2)
+                (lambda (i1 j1 i2 j2)
+                  (combiner (getter1 i1 j1)
+                            (getter2 i2 j2))))
+               (else
+                (lambda (i1 j1 . rest)
+                  (combiner (getter1 i1 j1)
+                            (apply getter2 rest))))))
+            ((3)
+             (case dimension2
+               ((1)
+                (lambda (i1 j1 k1 i2)
+                  (combiner (getter1 i1 j1 k1)
+                            (getter2 i2))))
+               (else
+                (lambda (i1 j1 k1 . rest)
+                  (combiner (getter1 i1 j1 k1)
+                            (apply getter2 rest))))))
+            (else
+             (lambda args
+               (combiner (apply getter1 (list-take args dimension1))
+                         (apply getter2 (list-tail args dimension1))))))))
+    (make-array result-domain result-getter)))
+
+(define (array-outer-product combiner array1 array2)
+  (cond ((not (array? array1))
+         (error "array-outer-product: The second argument is not an array: " combiner array1 array2))
+        ((not (array? array2))
+         (error "array-outer-product: The third argument is not an array: " combiner array1 array2))
+        ((not (procedure? combiner))
+         (error "array-outer-product: The first argument is not a procedure: " combiner array1 array2))
+        (else
+         (##array-outer-product combiner array1 array2))))
 
 (define (##immutable-array-curry array right-dimension)
   (call-with-values

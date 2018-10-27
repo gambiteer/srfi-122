@@ -1,6 +1,6 @@
-;;(declare (standard-bindings)(extended-bindings)(block)(not safe) (fixnum))
+(declare (standard-bindings)(extended-bindings)(block)(safe) (mostly-fixnum))
 (declare (inlining-limit 0))
-(define tests 1000)
+(define tests 100000)
 
 (define-macro (test expr value)
   `(let* (;(ignore (pretty-print ',expr))
@@ -39,7 +39,7 @@
       (+ a (random-integer (- b a)))
       (random-integer a)))
 
-(include "generic-arrays.scm")
+;; (include "generic-arrays.scm")
 
 (declare (generic))
 
@@ -377,19 +377,17 @@
 
 (let ((interval (make-interval '#(0 0) '#(100 100))))
   (test (interval-dilate interval 'a '#(-10 10))
-	"interval-dilate: second argument must be a vector: ")
+	"interval-dilate: The second argument is not a vector of exact integers: ")
   (test (interval-dilate 'a '#(10 10) '#(-10 -10))
-	"interval-dilate: first argument is not an interval: ")
+	"interval-dilate: The first argument is not an interval: ")
   (test (interval-dilate interval '#(10 10) 'a)
-	"interval-dilate: third argument must be a vector: ")
+"interval-dilate: The third argument is not a vector of exact integers: "	)
   (test (interval-dilate interval '#(10) '#(-10 -10))
 	"interval-dilate: The second and third arguments must have the same length as the dimension of the first argument: ")
-  (test (interval-dilate interval '#(10 10) '#( -10 a))
-	"interval-dilate: The second and third arguments must contain only exact integers: ")
   (test (interval-dilate interval '#(10 10) '#( -10))
 	"interval-dilate: The second and third arguments must have the same length as the dimension of the first argument: ")
   (test (interval-dilate interval '#(100 100) '#(-100 -100))
-	"interval-dilate: the resulting interval is empty: "))
+	"interval-dilate: The resulting interval is empty: "))
 
 
 
@@ -414,7 +412,7 @@
 	       (vector->list (make-vector (random min max)))))
 	 (upper
 	  (map (lambda (x)
-		 (+ (random 1 11) x))
+		 (+ (random 1 5) x))
 	       lower)))
     (make-interval (list->vector lower)
 		   (list->vector upper))))
@@ -1467,11 +1465,11 @@
 			   (map - args (vector->list translation)))))))
   
   (test (array-translate 'a 1)
-	"array-translate: the first argument is not an array: ")
+	"array-translate: The first argument is not an array: ")
   (test (array-translate immutable-array '#(1.))
-	"array-translate: the second argument is not a vector of exact integers: ")
+	"array-translate: The second argument is not a vector of exact integers: ")
   (test (array-translate immutable-array '#(0 2 3))
-	"array-translate: the dimension of the first argument (an array) does not equal the dimension of the second argument (a vector): ")
+	"array-translate: The dimension of the first argument (an array) does not equal the dimension of the second argument (a vector): ")
   (let ((specialized-result (array-translate specialized-array translation)))
     (test (specialized-array? specialized-result)
 	  #t))
@@ -1568,13 +1566,13 @@
        (permutation '#(1 0)))
   
   (test (array-permute 'a 1)
-	"array-permute: the first argument is not an array: ")
+	"array-permute: The first argument is not an array: ")
   (test (array-permute immutable-array '#(1.))
-	"array-permute: the second argument is not a permutation: ")
+	"array-permute: The second argument is not a permutation: ")
   (test (array-permute immutable-array '#(2))
-	"array-permute: the second argument is not a permutation: ")
+	"array-permute: The second argument is not a permutation: ")
   (test (array-permute immutable-array '#(0 1 2))
-	"array-permute: the dimension of the first argument (an array) does not equal the dimension of the second argument (a permutation): ")
+	"array-permute: The dimension of the first argument (an array) does not equal the dimension of the second argument (a permutation): ")
   (let ((specialized-result (array-permute specialized-array permutation)))
     (test (specialized-array? specialized-result)
 	  #t))
@@ -1912,19 +1910,19 @@
 (pp "array-reverse tests")
 
 (test (array-reverse 'a 'a)
-      "array-reverse: the first argument is not an array: ")
+      "array-reverse: The first argument is not an array: ")
 
 (test (array-reverse (make-array (make-interval '#(0 0) '#(2 2)) list)
                      'a)
-      "array-reverse: the second argument is not a vector of booleans: ")
+      "array-reverse: The second argument is not a vector of booleans: ")
 
 (test (array-reverse (make-array (make-interval '#(0 0) '#(2 2)) list)
                      '#(1 0))
-      "array-reverse: the second argument is not a vector of booleans: ")
+      "array-reverse: The second argument is not a vector of booleans: ")
 
 (test (array-reverse (make-array (make-interval '#(0 0) '#(2 2)) list)
                      '#(#t))
-      "array-reverse: the dimension of the first argument (an array) does not equal the dimension of the second argument (a vector of booleans): ")
+      "array-reverse: The dimension of the first argument (an array) does not equal the dimension of the second argument (a vector of booleans): ")
 
 
 (define (myarray-reverse array flip?)
@@ -2163,6 +2161,53 @@
       (test (myarray= Array new-array)
 	    #t))))
 
+(pp "interval-cartesian-product and array-outer-product")
+
+(define (my-interval-cartesian-product . args)
+  (make-interval (list->vector (apply append (map interval-lower-bounds->list args)))
+                 (list->vector (apply append (map interval-upper-bounds->list args)))))
+
+(test (interval-cartesian-product 'a)
+      "interval-cartesian-product: Not all arguments are intervals: ")
+
+(test (interval-cartesian-product (make-interval '#(0) '#(1)) 'a)
+      "interval-cartesian-product: Not all arguments are intervals: ")
+
+(define (make-list n #!optional (item #f))
+  (if (zero? n)
+      '()
+      (cons item (make-list (- n 1) item))))
+
+(do ((i 0 (+ i 1)))
+    ((= i tests))
+  (let* ((intervals
+          (map (lambda (ignore)
+                 (random-interval 1 4))
+               (make-list (random 1 3)))))
+    (test (apply interval-cartesian-product intervals)
+          (apply my-interval-cartesian-product intervals))))
+
+(let ((test-array (make-array  (make-interval '#(0) '#(1)) list)))
+
+  (test (array-outer-product 'a test-array test-array)
+        "array-outer-product: The first argument is not a procedure: ")
+
+  (test (array-outer-product append 'a test-array)
+        "array-outer-product: The second argument is not an array: ")
+
+  (test (array-outer-product append test-array 'a)
+        "array-outer-product: The third argument is not an array: "))
+
+(do ((i 0 (+ i 1)))
+    ((= i tests))
+  (let* ((arrays
+          (map (lambda (ignore)
+                 (make-array (random-interval 1 5) list))
+               (make-list 2))))
+    (test (myarray= (apply array-outer-product append arrays)
+                    (make-array (apply my-interval-cartesian-product (map array-domain arrays))
+                                list))
+          #t)))
 
 (pp "Test code from the SRFI document")
 
@@ -2179,7 +2224,7 @@
       #t)
 
 (test (interval-dilate (make-interval '#(0 0) '#(100 100)) '#(0 0) '#(-500 -50))
-      "interval-dilate: the resulting interval is empty: ")
+      "interval-dilate: The resulting interval is empty: ")
 
 (define a (make-array (make-interval '#(1 1) '#(11 11))
 		      (lambda (i j)
@@ -2497,13 +2542,6 @@
 		      (array->list image))))
 
  
-(define A
-  (array->specialized-array
-   (make-array (make-interval '#(0 0)
-                              '#(4 4))
-               (lambda (i j)
-                 (/ (+ 1 i j))))))
-
 (define (array-display A)
   (array-for-each (lambda (row)
                     (array-for-each (lambda (x)
@@ -2512,10 +2550,6 @@
                                     row)
                     (newline))
                   (array-curry A 1)))
-
-(display "\nHilbert matrix:\n\n")
-
-(array-display A)
 
 (define (LU-decomposition A)
   ;; Assumes the domain of A is [0,n)\\times [0,n)
@@ -2529,12 +2563,23 @@
         ((= i (fx- n 1)) A)
       (let* ((pivot
               (getter i i))
+             (column/row-domain
+              ;; both will be one-dimensional
+              (make-interval (vector (+ i 1))
+                             (vector n)))
              (column
               ;; the column below the (i,i) entry
-              (array-extract
-               A (make-interval
-                  (vector (fx+ i 1) i)
-                  (vector n         (fx+ i 1)))))
+              (specialized-array-share A
+                                       column/row-domain
+                                       (lambda (k)
+                                         (values k i))))
+             (row
+              ;; the row to the right of the (i,i) entry
+              (specialized-array-share A
+                                       column/row-domain
+                                       (lambda (j)
+                                         (values i j))))
+
              ;; the subarray to the right and
              ;;below the (i,i) entry
              (subarray
@@ -2554,16 +2599,20 @@
          subarray
          (array-map -
                     subarray
-                    (make-array
-                     (array-domain subarray)
-                     (lambda (l m)
-                       (* (getter l i)
-                          (getter i m))))))))))
+                    (array-outer-product * column row)))))))
+
+(define A
+  (array->specialized-array
+   (make-array (make-interval '#(0 0)
+                              '#(4 4))
+               (lambda (i j)
+                 (/ (+ 1 i j))))))
+
+(display "\nHilbert matrix:\n\n")
+(array-display A)
 
 (LU-decomposition A)
 
 (display "\nLU decomposition of Hilbert matrix:\n\n")
 
 (array-display A)
-
-
