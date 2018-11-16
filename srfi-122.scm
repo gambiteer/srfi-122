@@ -80,7 +80,7 @@ MathJax.Hub.Config({
         (<h2> "Post-finalization note")
         (<p> "This document, the associated implementation in generic-arrays.scm, and the test file test-arrays.scm differ from the finalized SRFI-122 in the following ways:")
         (<ul>
-         (<li> "The procedures "(<code>'interval-cartesian-product)", "(<code>'array-outer-product)", and "(<code>'array-assign!)" have been added.")
+         (<li> "The procedures "(<code>'interval-cartesian-product)", "(<code>'array-outer-product)", "(<code>'array-tile)", and "(<code>'array-assign!)" have been added.")
          (<li> "The discussion of Haar transforms as examples of separable transforms has been corrected.")
          (<li> "The sample procedure "(<code>'LU-decomposition)" has been added to this document and test-arrays.scm."))
 
@@ -968,6 +968,7 @@ of whose elements is itself an (immutable) array and ")
                  (append outer-multi-index
                          inner-multi-index))))))))"))
 (<p> "It is an error to call "(<code> 'array-curry)" if its arguments do not satisfy these conditions.")
+(<p> "Please see the note in the discussion of "(<a> href: "#array-tile" "array-tile")".")
 
 (<p>"Example:")
 (<pre>
@@ -1021,6 +1022,8 @@ $$
 $$
 (The \"minimum\" operators are necessary if $u_j-l_j$ is not divisible by $s_j$.) Thus, each entry of $T$ will be a specialized, mutable, or immutable array, depending on the type of the input array "(<code>(<var>'A))".")
 (<p> "It is an error if the arguments of "(<code>'array-tile)" do not satisfy these conditions.")
+
+(<p> (<b> "Note: ")"The routines "(<code>'array-tile)" and "(<code>'array-curry)" both decompose an array into subarrays, but in different ways.  For example, if "(<code>(<var>'A))" is defined as "(<code>"(make-array (make-interval '#(0 0) '#(10 10)) list)")", then "(<code>"(array-tile "(<var>'A)" '#(1 10))")" returns an array with domain "(<code>"(make-interval '#(0 0) '#(10 1))")", each element of which is an array with domain "(<code>"(make-interval '#(0 0) '#(1 10))")" (i.e., a two-dimensional array whose elements are two-dimensional arrays), while "(<code>"(array-curry "(<var>'A)" 1)")" returns an array with domain "(<code>"(make-interval '#(0) '#(10))")", each element of which has domain "(<code>"(make-interval '#(0) '#(10))")" (i.e., a one-dimensional array whose elements are one-dimensional arrays).")
 
 
 (format-lambda-list '(array-translate array translation))
