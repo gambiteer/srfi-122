@@ -1,6 +1,6 @@
 (declare (standard-bindings)(extended-bindings)(block)(safe) (mostly-fixnum))
 (declare (inlining-limit 0))
-(define tests 100000)
+(define tests 1000)
 
 (define-macro (test expr value)
   `(let* (;(ignore (pretty-print ',expr))
@@ -34,14 +34,17 @@
        ((= ,var ,n))
      ,@body))
 
+(define (make-list n #!optional (item #f))
+  (if (zero? n)
+      '()
+      (cons item (make-list (- n 1) item))))
+
 (define (random a #!optional b)
   (if b
       (+ a (random-integer (- b a)))
       (random-integer a)))
 
 ;; (include "generic-arrays.scm")
-
-(declare (generic))
 
 (pp "Interval error tests")
 
@@ -403,7 +406,7 @@
 			   interval-upper-bounds->list)))))
 
 
-(define (random-interval #!optional (min 1) (max 11) )
+(define (random-interval #!optional (min 1) (max 8) )
   ;; a random interval with min <= dimension < max
   ;; positive and negative lower bounds
   (let* ((lower
@@ -412,7 +415,7 @@
 	       (vector->list (make-vector (random min max)))))
 	 (upper
 	  (map (lambda (x)
-		 (+ (random 1 5) x))
+		 (+ (random 1 8) x))
 	       lower)))
     (make-interval (list->vector lower)
 		   (list->vector upper))))
@@ -1868,45 +1871,166 @@
                       my-sampled-array)
             #t)))
 
-(pp "test array-extract")
+(pp "test array-extract and array-tile")
 
-(let* ((domain (make-interval '#(0 0) '#(10 10)))
-       (array (make-array domain
-			  list))
-       (specialized-array (array->specialized-array array))
-       (mutable-array (let ((copy (array->specialized-array specialized-array)))
-			(make-array domain
-				    (array-getter copy)
-				    (array-setter copy)))))
-  (test (array-extract 'a 10)
-	"array-extract: The first argument is not an array: ")
-  (test (array-extract array 10)
-	"array-extract: The second argument is not an interval: ")
-  (test (array-extract array (make-interval '#(1 1) '#(11 11)))
-	"array-extract: The second argument (an interval) is not a subset of the domain of the first argument (an array): ")
-  (let* ((sub-interval (make-interval '#(0 0) '#(5 5)))
-	 (specialized-subarray (array-extract specialized-array sub-interval))
-	 (mutable-subarray     (array-extract mutable-array sub-interval)))
-    (test (myarray= (array-extract array sub-interval)
-		    (make-array sub-interval list))
-	  #t)
-    (do ((i 0 (fx+ i 1)))
-	((fx= i 100))
-      (call-with-values
-	  (lambda ()
-	    (random-multi-index domain))
-	(lambda args
-	  (let ((v (random-real)))
-	    (apply (array-setter specialized-subarray)
-		   v
-		   args)
-	    (apply (array-setter mutable-subarray)
-		   v
-		   args)))))
-    (test (myarray= specialized-subarray
-		    mutable-subarray)
-	  #t)))
+(do ((i 0 (fx+ i 1)))
+    ((fx= i tests))
+  (let* ((domain (random-interval))
+         (subdomain (random-subinterval domain))
+         (spec-A (array->specialized-array (make-array domain list)))
+         (spec-A-extract (array-extract spec-A subdomain))
+         (mut-A (let ((A-prime (array->specialized-array spec-A)))
+                  (make-array domain
+                              (array-getter A-prime)
+                              (array-setter A-prime))))
+         (mut-A-extract (array-extract mut-A subdomain))
+         (immutable-A (let ((A-prime (array->specialized-array spec-A)))
+                        (make-array domain
+                                    (array-getter A-prime))))
+         (immutable-A-extract (array-extract immutable-A subdomain))
+         (spec-B (array->specialized-array (make-array domain list)))
+         (spec-B-extract (array-extract spec-B subdomain))
+         (mut-B (let ((B-prime (array->specialized-array spec-B)))
+                  (make-array domain
+                              (array-getter B-prime)
+                              (array-setter B-prime))))
+         (mut-B-extract (array-extract mut-B subdomain)))
+    ;; test that the extracts are the same kind of arrays as the original
+    (if (not (and (specialized-array? spec-A)
+                  (specialized-array? spec-A-extract)
+                  (mutable-array? mut-A)
+                  (mutable-array? mut-A-extract)
+                  (not (specialized-array? mut-A))
+                  (not (specialized-array? mut-A-extract))
+                  (array? immutable-A)
+                  (array? immutable-A-extract)
+                  (not (mutable-array? immutable-A))
+                  (not (mutable-array? immutable-A-extract))
+                  (equal? (array-domain spec-A-extract) subdomain)
+                  (equal? (array-domain mut-A-extract) subdomain)
+                  (equal? (array-domain immutable-A-extract) subdomain)))
+        (error "extract: Aargh!"))
+    ;; test that applying the original setter to arguments in
+    ;; the subdomain gives the same answer as applying the
+    ;; setter of the extracted array to the same arguments.
+    (for-each (lambda (A B A-extract B-extract)
+                (let ((A-setter (array-setter A))
+                      (B-extract-setter (array-setter B-extract)))
+                  (do ((i 0 (fx+ i 1)))
+                      ((fx= i 100)
+                       (test (myarray= spec-A spec-B)
+                             #t)
+                       (test (myarray= spec-A-extract spec-B-extract)
+                             #t))
+                    (call-with-values
+                        (lambda ()
+                          (random-multi-index subdomain))
+                      (lambda multi-index
+                        (let ((val (random-real)))
+                          (apply A-setter val multi-index)
+                          (apply B-extract-setter val multi-index)))))))
+              (list spec-A mut-A)
+              (list spec-B mut-B)
+              (list spec-A-extract mut-A-extract)
+              (list spec-B-extract mut-B-extract))))
+    
 
+(test (array-tile 'a '#(10))
+      "array-tile: The first argument is not an array: ")
+(test (array-tile (make-array (make-interval '#(0 0) '#(10 10)) list) 'a)
+      "array-tile: The second argument is not a vector of exact positive integers: ")
+(test (array-tile (make-array (make-interval '#(0 0) '#(10 10)) list) '#(a a))
+      "array-tile: The second argument is not a vector of exact positive integers: ")
+(test (array-tile (make-array (make-interval '#(0 0) '#(10 10)) list) '#(-1 1))
+      "array-tile: The second argument is not a vector of exact positive integers: ")
+(test (array-tile (make-array (make-interval '#(0 0) '#(10 10)) list) '#(10))
+      "array-tile: The dimension of the first argument (an array) does not equal the length of the second argument (a vector): ")
+
+(define (ceiling-quotient x d)
+  ;; assumes x and d are positive
+  (quotient (+ x d -1) d))
+
+(define (my-array-tile array sidelengths)
+  ;; an alternate definition more-or-less from the srfi document
+  (let* ((domain
+          (array-domain array))
+         (lowers
+          (##interval-lower-bounds domain))
+         (uppers
+          (##interval-upper-bounds domain))
+         (result-lowers
+          (##vector-map (lambda (x)
+                          0)
+                        lowers))
+         (result-uppers
+          (##vector-map (lambda (l u s)
+                          (ceiling-quotient (- u l) s))
+                        lowers uppers sidelengths)))
+    (make-array (make-interval result-lowers result-uppers)
+                (lambda i
+                  (let* ((vec-i
+                          (list->vector i))
+                         (result-lowers
+                          (##vector-map (lambda (l i s)
+                                          (+ l (* i s)))
+                                        lowers vec-i sidelengths))
+                         (result-uppers
+                          (##vector-map (lambda (l u i s)
+                                          (min u (+ l (* (+ i 1) s))))
+                                        lowers uppers vec-i sidelengths)))
+                    (array-extract array
+                                   (make-interval result-lowers result-uppers)))))))
+
+(do ((i 0 (fx+ i 1)))
+    ((fx= i tests))
+  (let* ((domain
+          (random-interval))
+         (array
+          (let ((res (make-array domain list)))
+            (case (random-integer 3)
+              ;; immutable
+              ((0) res)
+              ;; specialized
+              ((1) (array->specialized-array res))
+              (else
+               ;; mutable, but not specialized
+               (let ((res (array->specialized-array res)))
+                 (make-array domain (array-getter res) (array-setter res)))))))
+         (lowers
+          (##interval-lower-bounds domain))
+         (uppers
+          (##interval-upper-bounds domain))
+         (sidelengths
+          (##vector-map (lambda (l u)
+                        (let ((dim (- u l)))
+                          (random 1 (ceiling-quotient (* dim 7) 5))))
+                      lowers uppers))
+         (result
+          (array-tile array sidelengths))
+         (test-result
+          (my-array-tile array sidelengths)))
+    
+    ;; extract-array is tested independently, so we just make a few tests.
+
+    ;; test all the subdomain tiles are the same
+    (test (array-every (lambda (r t)
+                         (equal? (array-domain r) (array-domain t)))
+                       result test-result)
+          #t)
+    ;; test that the subarrays are the same type
+    (test (array-every (lambda (r t)
+                         (and 
+                          (eq? (mutable-array? r) (mutable-array? t))
+                          (eq? (mutable-array? r) (mutable-array? array))
+                          (eq? (specialized-array? r) (specialized-array? t))
+                          (eq? (specialized-array? r) (specialized-array? array))))
+                       result test-result)
+          #t)
+    ;; test that the first tile has the right values
+    (test (myarray= (apply (array-getter result) (make-list (vector-length lowers) 0))
+                    (apply (array-getter test-result) (make-list (vector-length lowers) 0)))
+          #t)))
+    
 (pp "array-reverse tests")
 
 (test (array-reverse 'a 'a)
@@ -2172,11 +2296,6 @@
 
 (test (interval-cartesian-product (make-interval '#(0) '#(1)) 'a)
       "interval-cartesian-product: Not all arguments are intervals: ")
-
-(define (make-list n #!optional (item #f))
-  (if (zero? n)
-      '()
-      (cons item (make-list (- n 1) item))))
 
 (do ((i 0 (+ i 1)))
     ((= i tests))

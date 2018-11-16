@@ -138,6 +138,8 @@ MathJax.Hub.Config({
 	 (<li> (<b> "Restricting the domain of an array: ")
 	       "  If the domain of $B$, $D_B$, is a subset of the domain of $A$, then $T_{BA}(\\vec i)=\\vec i$ is a one-to-one affine mapping.  We define "
 	       (<code>'array-extract)" to define this common operation; it's like looking at a rectangular sub-part of a spreadsheet. We use it to extract the common part of overlapping domains of three arrays in an image processing example below. ")
+         (<li> (<b> "Tiling an array: ")
+               "For various reasons (parallel processing, optimizing cache localization, GPU programming, etc.) one may wish to process a large array as a number of subarrays of the same dimensions, which we call "(<i>'tiling)" the array.  The routine "(<code>'array-tile)" returns a new array, each entry of which is a subarray extracted (in the sense of "(<code>'array-extract)") from the input array.")
 	 (<li> (<b> "Translating the domain of an array: ")
 	       "If $\\vec d$ is a vector of integers, then $T_{BA}(\\vec i)=\\vec i-\\vec d$ is a one-to-one affine map of $D_B=\\{\\vec i+\\vec d\\mid \\vec i\\in D_A\\}$ onto $D_A$. "
 	       "We call $D_B$ the "(<i>'translate)" of $D_A$, and we define "(<code>'array-translate)" to provide this operation.")
@@ -302,6 +304,7 @@ they may have hash tables or databases behind an implementation, one may read th
                  (<a> href: "#array->specialized-array" "array->specialized-array")END
                  (<a> href: "#array-curry" "array-curry")END
                  (<a> href: "#array-extract" "array-extract") END
+                 (<a> href: "#array-tile" "array-tile") END
                  (<a> href: "#array-translate" "array-translate")END
                  (<a> href: "#array-permute" "array-permute")END
                  (<a> href: "#array-reverse" "array-reverse")END
@@ -1004,6 +1007,20 @@ of whose elements is itself an (immutable) array and ")
 "
               ))
 (<p> "It is an error if the arguments of "(<code>'array-extract)" do not satisfy these conditions.")
+
+(format-lambda-list '(array-tile A S))
+
+(<p> "Assume that "(<code>(<var>'A))" is an array and "(<code>(<var>'S))" is a vector of positive, exact integers.  The routine "(<code>'array-tile)" returns a new immutable array $T$, each entry of which is a subarray of "(<code>'A)" whose domain has sidelengths given (mostly) by the entries of "(<code>(<var>'S))".  These subarrays completely \"tile\" "(<code>(<var>'A))", in the sense that every entry in "(<code>(<var>'A))" is an entry of precisely one entry of the result $T$.")
+(<p> "More formally, if "(<code>(<var>'S))" is the vector $(s_0,\\ldots,s_{d-1})$, and the domain of "(<code>(<var>'A))" is the interval $[l_0,u_0)\\times\\cdots\\times [l_{d-1},u_{d-1})$, then $T$ is an immutable array with all lower bounds zero and upper bounds given by
+$$
+\\operatorname{ceiling}((u_0-l_0)/s_0),\\ldots,\\operatorname{ceiling}((u_{d-1}-l_{d-1})/s_{d-1}).
+$$
+The $i_0,\\ldots,i_{d-1}$ entry of $T$ is "(<code>"(array-extract "(<var>'A)" D_i)")" with the interval "(<code>'D_i)" given by
+$$
+[l_0+i_0*s_0,\\min(l_0+(i_0+1)s_0,u_0))\\times\\cdots\\times[l_{d-1}+i_{d-1}*s_{d-1},\\min(l_{d-1}+(i_{d-1}+1)s_{d-1},u_{d-1})).
+$$
+(The \"minimum\" operators are necessary if $u_j-l_j$ is not divisible by $s_j$.) Thus, each entry of $T$ will be a specialized, mutable, or immutable array, depending on the type of the input array "(<code>(<var>'A))".")
+(<p> "It is an error if the arguments of "(<code>'array-tile)" do not satisfy these conditions.")
 
 
 (format-lambda-list '(array-translate array translation))

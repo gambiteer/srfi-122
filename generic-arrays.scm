@@ -61,7 +61,12 @@
 	(else
 	 (every-general (cons vec (cons vec2 vecs)) (- (vector-length vec) 1)))))
 
-(define (##vector-map f vec #!optional (vec2 (macro-absent-obj)) #!rest vecs)
+(define (##vector-map f vec
+                      #!optional
+                      (vec2 (macro-absent-obj))
+                      (vec3 (macro-absent-obj))
+                      (vec4 (macro-absent-obj))
+                      #!rest vecs)
 
   (define (map1 f vec)
     (let* ((n (vector-length vec))
@@ -78,10 +83,33 @@
 	(vector-set! result i (f (vector-ref vec1 i)
 				 (vector-ref vec2 i))))))
 
+  (define (map3 f vec1 vec2 vec3)
+    (let* ((n (vector-length vec1))
+	   (result (make-vector n)))
+      (do ((i 0 (fx+ i 1)))
+	  ((fx= i n) result)
+	(vector-set! result i (f (vector-ref vec1 i)
+				 (vector-ref vec2 i)
+                                 (vector-ref vec3 i))))))
+
+  (define (map4 f vec1 vec2 vec3 vec4)
+    (let* ((n (vector-length vec1))
+	   (result (make-vector n)))
+      (do ((i 0 (fx+ i 1)))
+	  ((fx= i n) result)
+	(vector-set! result i (f (vector-ref vec1 i)
+				 (vector-ref vec2 i)
+                                 (vector-ref vec3 i)
+                                 (vector-ref vec4 i))))))
+  
   (cond ((eq? vec2 (macro-absent-obj))
 	 (map1 f vec))
-	((null? vecs)
+        ((eq? vec3 (macro-absent-obj))
 	 (map2 f vec vec2))
+	((eq? vec4 (macro-absent-obj))
+	 (map3 f vec vec2 vec3))
+        ((null? vecs)
+	 (map4 f vec vec2 vec3 vec4))
 	(else ; punt
 	 (list->vector (apply map f (map vector->list (cons vec (cons vec2 vecs))))))))
 
@@ -1835,6 +1863,14 @@
 			      (array-indexer array)
 			      (specialized-array-default-safe?)))
 
+(define (##array-extract array new-domain)
+  (cond ((specialized-array? array)
+	 (##specialized-array-extract array new-domain))
+	((mutable-array? array)
+	 (##mutable-array-extract array new-domain))
+	(else
+	 (##immutable-array-extract array new-domain))))
+
 (define (array-extract array new-domain)
   (cond ((not (array? array))
 	 (error "array-extract: The first argument is not an array: " array new-domain))
@@ -1842,12 +1878,114 @@
 	 (error "array-extract: The second argument is not an interval: " array new-domain))
 	((not (##interval-subset? new-domain (array-domain array)))
 	 (error "array-extract: The second argument (an interval) is not a subset of the domain of the first argument (an array): " array new-domain))
-	((specialized-array? array)
-	 (##specialized-array-extract array new-domain))
-	((mutable-array? array)
-	 (##mutable-array-extract array new-domain))
 	(else
-	 (##immutable-array-extract array new-domain))))
+	 (##array-extract array new-domain))))
+
+(define (array-tile array sides)
+  (cond ((not (array? array))
+         (error "array-tile: The first argument is not an array: " array sides))
+        ((not (and (vector? sides)
+                   (##vector-every (lambda (x) (and (##exact-integer? x) (positive? x))) sides)))
+         (error "array-tile: The second argument is not a vector of exact positive integers: " array sides))
+        ((not (fx= (array-dimension array)
+                   (vector-length sides)))
+         (error "array-tile: The dimension of the first argument (an array) does not equal the length of the second argument (a vector): " array sides))
+        (else
+         (let* ((n
+                 (vector-length sides))
+                (domain
+                 (array-domain array))
+                (lower-bounds
+                 (##interval-lower-bounds domain))
+                (upper-bounds
+                 (##interval-upper-bounds domain))
+                (result-lower-bounds
+                 (make-vector n 0))
+                (result-upper-bounds
+                 (##vector-map (lambda (l u s)
+                                 (quotient (fx+ (fx- u l)
+                                                (fx- s 1))
+                                           s))
+                               lower-bounds upper-bounds sides))
+                (result-domain
+                 (make-##interval result-lower-bounds result-upper-bounds)))
+           
+           (define-macro (generate-result)
+             
+             (define (symbol-append . args)
+               (string->symbol
+                (apply string-append (map (lambda (x)
+                                            (cond ((symbol? x)
+                                                   (symbol->string x))
+                                                  ((number? x)
+                                                   (number->string x))
+                                                  ((string? x)
+                                                   x)
+                                                  (else
+                                                   (error "Arghh!"))))
+                                          args))))
+
+             (define (iota n)
+               ;; generates list of (- n 1) ... 0
+               (if (zero? n)
+                   '()
+                   (cons (- n 1) (iota (- n 1)))))
+      
+            `(case n
+                ,@(map (lambda (k)
+                         (let* ((indices
+                                 (reverse (iota k)))
+                                (args
+                                 (map (lambda (j) (symbol-append 'i j)) indices))
+                                (lowers
+                                 (map (lambda (j) (symbol-append 'l j)) indices))
+                                (uppers
+                                 (map (lambda (j) (symbol-append 'u j)) indices))
+                                (sides
+                                 (map (lambda (j) (symbol-append 's j)) indices)))
+                           `((,k)
+                             (lambda ,args
+                               (if (not (and ,@(map (lambda (arg) `(##exact-integer? ,arg)) args)
+                                             (,(symbol-append '##interval-contains-multi-index?- k) result-domain ,@args)))
+                                   (begin
+                                     (pp (list 'error "array-tile: Index to result array is not valid: " domain sides result-domain ,@args))
+                                     (error "array-tile: Index to result array is not valid: " ,@args))
+                                   (let* (,@(map (lambda (l j)
+                                                   `(,l (vector-ref lower-bounds ,j)))
+                                                 lowers indices)
+                                          ,@(map (lambda (u j)
+                                                   `(,u (vector-ref upper-bounds ,j)))
+                                                 uppers indices)
+                                          ,@(map (lambda (s j)
+                                                   `(,s (vector-ref sides ,j)))
+                                                 sides indices)
+                                          (subdomain
+                                           (make-##interval (vector ,@(map (lambda (l s i)
+                                                                             `(+ ,l (* ,s ,i)))
+                                                                           lowers sides args))
+                                                            (vector ,@(map (lambda (l u s i)
+                                                                             `(min ,u (+ ,l (* ,s (+ ,i 1)))))
+                                                                           lowers uppers sides args)))))
+                                     (##array-extract array subdomain)))))))
+                       '(1 2 3 4))
+                (else
+                 (lambda i
+                   (if (not (and (= (length i) n)
+                                 (##every ##exact-integer? i)
+                                 (##interval-contains-multi-index?-general result-domain i)))
+                             (apply error "array-tile: Index to result array is not valid: " i)
+                             (let* ((i (list->vector i))
+                                    (subdomain (make-##interval
+                                                (##vector-map (lambda (l s i)
+                                                                (+ l (* s i)))
+                                                              lower-bounds sides i)
+                                                (##vector-map (lambda (l u s i)
+                                                                (min u (+ l (* s (+ i 1)))))
+                                                              lower-bounds upper-bounds sides i))))
+                               (##array-extract array subdomain)))))))
+
+           (make-array result-domain (generate-result))))))
+                       
 
 (define (##getter-translate getter translation)
   (case (vector-length translation)
@@ -2606,15 +2744,15 @@
                   ;; (< i upper-i) is always true because index is >= 0
                   (let j-loop ((j lower-j)
                                (index index))
-                    (cond ((zero? index)
+                    (cond ((= j upper-j)
+                           (i-loop (+ i 1)
+                                   index))
+                          ((zero? index)
                            (f i j))
-                          ((< j upper-j)
+                          (else
                            (,connector (f i j)
                                        (j-loop (+ j 1)
-                                               (- index 1))))
-                          (else
-                           (i-loop (+ i 1)
-                                   index)))))))
+                                               (- index 1)))))))))
          ((3) (let ((lower-i (##interval-lower-bound interval 0))
                     (lower-j (##interval-lower-bound interval 1))
                     (lower-k (##interval-lower-bound interval 2))
@@ -2630,15 +2768,15 @@
                     (if (< j upper-j)
                         (let k-loop ((k lower-k)
                                      (index index))
-                          (cond ((zero? index)
+                          (cond ((= k upper-k)
+                                 (j-loop (+ j 1)
+                                         index))
+                                ((zero? index)
                                  (f i j k))
-                                ((< k upper-k)
+                                (else
                                  (,connector (f i j k)
                                              (k-loop (+ k 1)
-                                                     (- index 1))))
-                                (else
-                                 (j-loop (+ j 1)
-                                         index))))
+                                                     (- index 1))))))
                         (i-loop (+ i 1)
                                 index))))))
          ((4) (let ((lower-i (##interval-lower-bound interval 0))
@@ -2660,15 +2798,15 @@
                           (if (< k upper-k)
                               (let l-loop ((l lower-l)
                                            (index index))
-                                (cond ((zero? index)
+                                (cond ((= l upper-l)
+                                       (k-loop (+ k 1)
+                                               index))
+                                      ((zero? index)
                                        (f i j k l))
-                                      ((< l upper-l)
+                                      (else
                                        (,connector (f i j k l)
                                                    (l-loop (+ l 1)
-                                                           (- index 1))))
-                                      (else
-                                       (k-loop (+ k 1)
-                                               index))))
+                                                           (- index 1))))))
                               (j-loop (+ j 1)
                                       index)))
                         (i-loop (+ i 1)
