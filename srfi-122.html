@@ -39,7 +39,7 @@
     <h2>Post-finalization note</h2>
     <p>This document, the associated implementation in generic-arrays.scm, and the test file test-arrays.scm differ from the finalized SRFI-122 in the following ways:</p>
     <ul>
-      <li>The procedures <code>interval-cartesian-product</code>, <code>array-outer-product</code>, and <code>array-assign!</code> have been added.</li>
+      <li>The procedures <code>interval-cartesian-product</code>, <code>array-outer-product</code>, <code>array-tile</code>, and <code>array-assign!</code> have been added.</li>
       <li>The discussion of Haar transforms as examples of separable transforms has been corrected.</li>
       <li>The sample procedure <code>LU-decomposition</code> has been added to this document and test-arrays.scm.</li></ul>
     <h2>Abstract</h2>
@@ -720,6 +720,7 @@ indexer:       (lambda multi-index
                  (append outer-multi-index
                          inner-multi-index))))))))</code></pre>
     <p>It is an error to call <code>array-curry</code> if its arguments do not satisfy these conditions.</p>
+    <p>Please see the note in the discussion of <a href="#array-tile">array-tile</a>.</p>
     <p>Example:</p>
     <pre><code>
 (define a (make-array (make-interval '#(0 0)
@@ -764,6 +765,7 @@ indexer:       (lambda multi-index
       $$
       (The &quot;minimum&quot; operators are necessary if $u_j-l_j$ is not divisible by $s_j$.) Thus, each entry of $T$ will be a specialized, mutable, or immutable array, depending on the type of the input array <code><var>A</var></code>.</p>
     <p>It is an error if the arguments of <code>array-tile</code> do not satisfy these conditions.</p>
+    <p><b>Note: </b>The routines <code>array-tile</code> and <code>array-curry</code> both decompose an array into subarrays, but in different ways.  For example, if <code><var>A</var></code> is defined as <code>(make-array (make-interval '#(0 0) '#(10 10)) list)</code>, then <code>(array-tile <var>A</var> '#(1 10))</code> returns an array with domain <code>(make-interval '#(0 0) '#(10 1))</code>, each element of which is an array with domain <code>(make-interval '#(0 0) '#(1 10))</code> (i.e., a two-dimensional array whose elements are two-dimensional arrays), while <code>(array-curry <var>A</var> 1)</code> returns an array with domain <code>(make-interval '#(0) '#(10))</code>, each element of which has domain <code>(make-interval '#(0) '#(10))</code> (i.e., a one-dimensional array whose elements are one-dimensional arrays).</p>
     <p><b>Procedure: </b><code><a name="array-translate">array-translate</a> <var>array</var> <var>translation</var></code></p>
     <p>Assumes that <code><var>array</var></code> is a valid array, <code><var>translation</var></code> is a valid translation, and that the dimensions of the array and the translation are the same. The resulting array will have domain <code>(interval-translate (array-domain array) translation)</code>.</p>
     <p>If <code><var>array</var></code> is a specialized array, returns a new specialized array</p>
