@@ -2587,17 +2587,17 @@
       (helper a))))
 
 (define (1D-Haar-loop a)
-  (let ((getter (array-getter a))
-	(setter (array-setter a))
+  (let ((a_ (array-getter a))
+	(a! (array-setter a))
 	(n (interval-upper-bound (array-domain a) 0)))
     (do ((i 0 (fx+ i 2)))
 	((fx= i n))
-      (let* ((a_i               (getter i))
-	     (a_i+1             (getter (fx+ i 1)))
+      (let* ((a_i               (a_ i))
+	     (a_i+1             (a_ (fx+ i 1)))
 	     (scaled-sum        (fl/ (fl+ a_i a_i+1) (flsqrt 2.0)))
 	     (scaled-difference (fl/ (fl- a_i a_i+1) (flsqrt 2.0))))
-	(setter scaled-sum i)
-	(setter scaled-difference (fx+ i 1))))))
+	(a! scaled-sum i)
+	(a! scaled-difference (fx+ i 1))))))
 
 (define 1D-Haar-transform
   (recursively-apply-transform-and-downsample 1D-Haar-loop))
@@ -2676,12 +2676,12 @@
   ;; without pivoting.
   (let ((n
          (interval-upper-bound (array-domain A) 0))
-        (getter
+        (A_
          (array-getter A)))
     (do ((i 0 (fx+ i 1)))
         ((= i (fx- n 1)) A)
       (let* ((pivot
-              (getter i i))
+              (A_ i i))
              (column/row-domain
               ;; both will be one-dimensional
               (make-interval (vector (+ i 1))

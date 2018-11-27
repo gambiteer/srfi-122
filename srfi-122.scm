@@ -93,6 +93,16 @@ MathJax.Hub.Config({
 	 "integers.  Thus, we introduce a data type "
 	 "called "(<i> 'intervals)", which encapsulate the cross product of nonempty intervals of exact integers. "
 	 "Specialized variants of arrays are specified to provide portable programs with efficient representations for common use cases.")
+        (<h2> "Motivation")
+        (<p> "This SRFI was motivated by a number of somewhat independent notions, which we outline here and which are explained below.")
+        (<ul>
+         (<li> "Provide a "(<b> "general API")" (Application Program Interface) that specifies the minimal required properties of any given array, without requiring any specific implementation strategy from the programmer for that array.")
+         (<li> "Provide a "(<b> "single, efficient implementation for dense arrays")" (which we call "(<i>"specialized arrays")").")
+         (<li> "Provide "(<b> "useful array transformations")" by exploiting the algebraic structure of affine one-to-one mappings on multi-indices.")
+         (<li> "Separate "(<b>"the routines that specify the work to be done")" ("(<code>'array-map)", "(<code>'array-outer-product)", etc.) from "(<b>"the routines that actually do the work")" ("(<code>'array->specialized-array)", "(<code>'array-assign!)", "(<code>'array-fold)", etc.). This approach "(<b> "avoids temporary intermediate arrays")" in computations.")
+         (<li> "Encourage " (<b> "bulk processing of arrays")" rather than word-by-word operations.")
+               )
+                    
 	(<h2> "Overview")
 	(<h3> "Bawden-style arrays")
 	(<p>  "In a "(<a> href: "https://groups.google.com/forum/?hl=en#!msg/comp.lang.scheme/7nkx58Kv6RI/a5hdsduFL2wJ" "1993 post")
@@ -205,6 +215,9 @@ they may have hash tables or databases behind an implementation, one may read th
 	(<p> "We provide the procedure "(<code>'array->specialized-array)" to transform a generalized array (like that returned by "(<code>'array-map)
 	     ") to a specialized, Bawden-style array, for which accessing each element again takes $O(1)$ operations.")
 
+        (<h3> "Notational convention")
+        (<p> "If "(<code>(<var>'A))" is an array, then we generally define "(<code>(<var>'A_))" to be "(<code>"(array-getter "(<var>'A)")")" and  "(<code>(<var>'A!))" to be "(<code>"(array-setter "(<var>'A)")")".  The latter notation is motivated by the general Scheme convention that the names of functions that modify the contents of data structures end in "(<code>(<var>"!"))", while the notation for the getter of an array is motivated by the TeX notation for subscripts.  See particularly the "(<a> href: "#Haar" "Haar transform")" example.")
+
 
 
 
@@ -219,11 +232,7 @@ they may have hash tables or databases behind an implementation, one may read th
                " in programming---we are currying the getter of the array and keeping careful track of the domains. " #\newline
                (<code>'interval-projections)" can be thought of as currying the " #\newline
                "characteristic function of the interval,  encapsulated here as "(<code> 'interval-contains-multi-index?)".")
-         (<li> (<b> "Choice of functions on intervals. ")"The choice of functions for both arrays and intervals was motivated almost solely by what I needed for arrays.  There are " #\newline
-               "natural operations on intervals, like "
-               (<pre> (<code>"(interval-cross-product interval1 interval2 ...)"))
-               "(the inverse of "(<code> 'interval-projections)"),
-       which don't seem terribly natural for arrays.")
+         (<li> (<b> "Choice of functions on intervals. ")"The choice of functions for both arrays and intervals was motivated almost solely by what I needed for arrays.")
          (<li> (<b> "No empty intervals. ")"This SRFI considers arrays over only nonempty intervals of positive dimension.  The author of this proposal acknowledges that other languages and array systems allow either zero-dimensional intervals or empty intervals of positive dimension, but prefers to leave such empty intervals as possibly compatible extensions to the current proposal.")
          (<li> (<b> "Multi-valued arrays. ")"While this SRFI restricts attention to single-valued arrays, wherein the getter of each array returns a single value, allowing multi-valued immutable arrays would a compatible extension of this SRFI.")
          (<li> (<b> "No low-level specialized-array constructor. ")
@@ -681,7 +690,7 @@ setter "(<code>(<var> 'setter))".  It is an error to call "(<code> 'make-array)"
 (<p> "Example: ")
 (<pre>
  (<code>"
-(define sparse-array
+(define a   ;; a sparse array
   (let ((domain
          (make-interval '#(0 0)
                         '#(1000000 1000000)))
@@ -704,11 +713,15 @@ setter "(<code>(<var> 'setter))".  It is an error to call "(<code> 'make-array)"
                i
                (cons (cons j v)
                      (vector-ref sparse-rows i)))))))))
-  ((array-getter sparse-array) 12345 6789)  => 0.
-  ((array-getter sparse-array) 0 0) => 0.
-  ((array-setter sparse-array) 1.0 0 0) => undefined
-  ((array-getter sparse-array) 12345 6789)  => 0.
-  ((array-getter sparse-array) 0 0) => 1."))
+
+(define a_ (array-getter a))
+(define a! (array-setter a))
+
+(a_ 12345 6789)  => 0.
+(a_ 0 0) => 0.
+(a! 1.0 0 0) => undefined
+(a_ 12345 6789)  => 0.
+(a_ 0 0) => 1."))
 
 (format-lambda-list '(array? obj))
 (<p> "Returns "(<code> "#t")" if  "(<code>(<var> 'obj))" is an array and "(<code> '#f)" otherwise.")
@@ -724,14 +737,16 @@ It is an error to call "(<code> 'array-domain)" or "(<code> 'array-getter)" if "
 (<p> "Example: ")
 (<pre>
  (<code>"
-  (define a (make-array (make-interval '#(1 1) '#(11 11))
-                        (lambda (i j)
-                          (if (= i j)
-                              1
-                              0))))
-  ((array-getter a) 3 3) => 1
-  ((array-getter a) 2 3) => 0
-  ((array-getter a) 11 0) => is an error"))
+(define a (make-array (make-interval '#(1 1) '#(11 11))
+                      (lambda (i j)
+                        (if (= i j)
+                            1
+                            0))))
+(defina a_ (array-getter a))
+
+(a_ 3 3) => 1
+(a_ 2 3) => 0
+(a_ 11 0) => is an error"))
 
 (format-lambda-list '(array-dimension array))
 (<p> "Shorthand for "(<code>"(interval-dimension (array-domain "(<var>'array)"))")".  It is an error to call this function if "(<code>(<var>'array))" is not an array.")
@@ -889,22 +904,25 @@ indexer:       (lambda multi-index
 (<p> "For example, if "(<code>'A)" and "(<code> 'B)" are defined by ")
 (<pre>
  (<code>"
-  (define interval (make-interval '#(0 0 0 0)
-                                  '#(10 10 10 10)))
-  (define A (make-array interval list))
-  (define B (array-curry A 1))
+(define interval (make-interval '#(0 0 0 0)
+                                '#(10 10 10 10)))
+(define A (make-array interval list))
+(define B (array-curry A 1))
+
+(define A_ (array-getter A))
+(define B_ (array-getter B))
   "))
 (<p> "so")
 (<pre>
  (<code>"
-  ((array-getter A) i j k l) => (list i j k l)"))
+(A_ i j k l) => (list i j k l)"))
 (<p> "then "(<code>'B)" is an immutable array with domain "(<code>"(make-interval '#(0 0 0) '#(10 10 10))")", each
 of whose elements is itself an (immutable) array and ")
 (<pre>
  (<code>"
 (equal?
- ((array-getter A) i j k l)
- ((array-getter ((array-getter B) i j k)) l)) => #t
+ (A_ i j k l)
+ ((array-getter (B_ i j k)) l)) => #t
 "))
 (<p> "for all multi-indices "(<code> "i j k l")" in "(<code> 'interval)".")
 (<p> "The subarrays are immutable, mutable, or specialized according to whether the array argument is immutable, mutable, or specialized.")
@@ -975,9 +993,11 @@ of whose elements is itself an (immutable) array and ")
 (define a (make-array (make-interval '#(0 0)
                                      '#(10 10))
                       list))
-((array-getter a) 3 4)  => (3 4)
+(define a_ (array-getter a))
+(a_ 3 4)  => (3 4)
 (define curried-a (array-curry a 1))
-((array-getter ((array-getter curried-a) 3)) 4)
+(define curried-a_ (array-getter curried-a))
+((array-getter (curried-a_ 3)) 4)
                     => (3 4)"))
 
 
@@ -1130,7 +1150,7 @@ a mutable-array, then "(<code>'array-permute)" returns the new mutable")
          (uppers (interval-upper-bounds->list domain)))
     (lambda (multi-index)
       (map (lambda (i_k flip?_k l_k u_k)
-             (if flip?
+             (if flip?_k
                  (- (+ l_k u_k -1) i_k)
                  i_k))
            multi-index
@@ -1653,20 +1673,20 @@ Second-differences in the direction $k\\times (1,-1)$:
               (transform a))))
       (helper a))))
 "))
-(<p> "By adding a single loop that calculates scaled sums and differences of adjacent elements in a one-dimensional array, we can define various Haar wavelet transforms as follows:")
+(<p>  "By adding a single loop that calculates scaled sums and differences of adjacent elements in a one-dimensional array, we can define various "(<a> name: "Haar" "Haar wavelet transforms")" as follows:")
 (<pre>(<code>"
 (define (1D-Haar-loop a)
-  (let ((getter (array-getter a))
-	(setter (array-setter a))
+  (let ((a_ (array-getter a))
+	(a! (array-setter a))
 	(n (interval-upper-bound (array-domain a) 0)))
     (do ((i 0 (fx+ i 2)))
 	((fx= i n))
-      (let* ((a_i               (getter i))
-	     (a_i+1             (getter (fx+ i 1)))
+      (let* ((a_i               (a_ i))
+	     (a_i+1             (a_ (fx+ i 1)))
 	     (scaled-sum        (fl/ (fl+ a_i a_i+1) (flsqrt 2.0)))
 	     (scaled-difference (fl/ (fl- a_i a_i+1) (flsqrt 2.0))))
-	(setter scaled-sum i)
-	(setter scaled-difference (fx+ i 1))))))
+	(a! scaled-sum i)
+	(a! scaled-difference (fx+ i 1))))))
 
 (define 1D-Haar-transform
   (recursively-apply-transform-and-downsample 1D-Haar-loop))
@@ -1810,12 +1830,12 @@ The code uses "(<code>'array-assign!)", "(<code>'specialized-array-share)", "(<c
   ;; without pivoting.
   (let ((n
          (interval-upper-bound (array-domain A) 0))
-        (getter
+        (A_
          (array-getter A)))
     (do ((i 0 (fx+ i 1)))
         ((= i (fx- n 1)) A)
       (let* ((pivot
-              (getter i i))
+              (A_ i i))
              (column/row-domain
               ;; both will be one-dimensional
               (make-interval (vector (+ i 1))
