@@ -13,15 +13,6 @@
 
 (##define-macro (macro-absent-obj)  `',(##type-cast -6 2))
 
-;;; This is Gambit-specific to make it a bit faster
-
-(declare (inline))
-
-(define (##exact-integer? x)
-  (or (##fixnum? x)
-      (##bignum? x)))
-
-(declare (not inline))
 
 ;;; We need a multi-argument every, but not something as fancy as in Olin Shiver's
 ;;; list library.  (Shiver's version works fine, though, for our purposes.)
@@ -36,6 +27,8 @@
 	(or (null? list)
 	    (and (pred (car list))
 		 (loop (cdr list)))))))
+
+;;; the following is used in error checks.
 
 (define (##vector-every pred vec #!optional (vec2 (macro-absent-obj)) #!rest vecs)
   
@@ -61,73 +54,15 @@
 	(else
 	 (every-general (cons vec (cons vec2 vecs)) (- (vector-length vec) 1)))))
 
-(define (##vector-map f vec
-                      #!optional
-                      (vec2 (macro-absent-obj))
-                      (vec3 (macro-absent-obj))
-                      (vec4 (macro-absent-obj))
-                      #!rest vecs)
+;;; requires vector-map function
 
-  (define (map1 f vec)
-    (let* ((n (vector-length vec))
-	   (result (make-vector n)))
-      (do ((i 0 (fx+ i 1)))
-	  ((fx= i n) result)
-	(vector-set! result i (f (vector-ref vec i))))))
+;;; requires append-vectors function
 
-  (define (map2 f vec1 vec2)
-    (let* ((n (vector-length vec1))
-	   (result (make-vector n)))
-      (do ((i 0 (fx+ i 1)))
-	  ((fx= i n) result)
-	(vector-set! result i (f (vector-ref vec1 i)
-				 (vector-ref vec2 i))))))
+;;; requires exact-integer? function
 
-  (define (map3 f vec1 vec2 vec3)
-    (let* ((n (vector-length vec1))
-	   (result (make-vector n)))
-      (do ((i 0 (fx+ i 1)))
-	  ((fx= i n) result)
-	(vector-set! result i (f (vector-ref vec1 i)
-				 (vector-ref vec2 i)
-                                 (vector-ref vec3 i))))))
+;;; requires iota, drop, take from SRFI-1
 
-  (define (map4 f vec1 vec2 vec3 vec4)
-    (let* ((n (vector-length vec1))
-	   (result (make-vector n)))
-      (do ((i 0 (fx+ i 1)))
-	  ((fx= i n) result)
-	(vector-set! result i (f (vector-ref vec1 i)
-				 (vector-ref vec2 i)
-                                 (vector-ref vec3 i)
-                                 (vector-ref vec4 i))))))
-  
-  (cond ((eq? vec2 (macro-absent-obj))
-	 (map1 f vec))
-        ((eq? vec3 (macro-absent-obj))
-	 (map2 f vec vec2))
-	((eq? vec4 (macro-absent-obj))
-	 (map3 f vec vec2 vec3))
-        ((null? vecs)
-	 (map4 f vec vec2 vec3 vec4))
-	(else ; punt
-	 (list->vector (apply map f (map vector->list (cons vec (cons vec2 vecs))))))))
-
-(define (##vector-append*  vecs)
-  (let ((lens (map vector-length vecs)))
-    (let ((result (make-vector (apply + lens))))
-      (let outer ((vecs vecs) (lens lens) (i 0))
-        (if (null? vecs)
-            result
-            (let ((vec (car vecs))
-                  (len (car lens)))
-              (let inner ((i i) (j 0))
-                (if (fx= j len)
-                    (outer (cdr vecs) (cdr lens) i)
-                    (begin
-                      (vector-set! result i (vector-ref vec j))
-                      (inner (fx+ i 1) (fx+ j 1)))))))))))
-                    
+;;; requires fixnum? and flonum?
 
 (declare (inline))
 
@@ -149,11 +84,11 @@
 (define (make-interval lower-bounds upper-bounds)
   (cond ((not (and (vector? lower-bounds)
                    (< 0 (vector-length lower-bounds))
-                   (##vector-every ##exact-integer? lower-bounds)))
+                   (##vector-every exact-integer? lower-bounds)))
 	 (error "make-interval: The first argument is not a nonempty vector of exact integers: " lower-bounds upper-bounds))
         ((not (and (vector? upper-bounds)
                    (< 0 (vector-length upper-bounds))
-                   (##vector-every ##exact-integer? upper-bounds)))
+                   (##vector-every exact-integer? upper-bounds)))
 	 (error "make-interval: The second argument is not a nonempty vector of exact integers: " lower-bounds upper-bounds))
 	((not (= (vector-length lower-bounds) (vector-length upper-bounds)))
 	 (error "make-interval: The first and second arguments are not the same length: " lower-bounds upper-bounds))
@@ -197,7 +132,7 @@
 (define (interval-lower-bound interval i)
   (cond ((not (interval? interval))
 	 (error "interval-lower-bound: argument is not an interval: " interval i))
-	((not (##exact-integer? i))
+	((not (exact-integer? i))
 	 (error "interval-lower-bound: argument is not an exact integer: " interval i))
 	((not (< -1 i (##interval-dimension interval)))
 	 (error "interval-lower-bound: index is not between 0 (inclusive) and (interval-dimension interval) (exclusive): " interval i))
@@ -207,7 +142,7 @@
 (define (interval-upper-bound interval i)
   (cond ((not (interval? interval))
 	 (error "interval-upper-bound: argument is not an interval: " interval i))
-	((not (##exact-integer? i))
+	((not (exact-integer? i))
 	 (error "interval-upper-bound: argument is not an exact integer: " interval i))
 	((not (< -1 i (##interval-dimension interval)))
 	 (error "interval-upper-bound: index is not between 0 (inclusive) and (interval-dimension interval) (exclusive): " interval i))
@@ -243,7 +178,7 @@
 	 (error "interval-projections: The first argument is not an interval: " interval right-dimension))
 	((not (< 1 (##interval-dimension interval)))  ;; redundant check, but useful error message
 	 (error "interval-projections: The dimension of the first argument is not greater than 1: " interval right-dimension))
-	((not (##exact-integer? right-dimension))
+	((not (exact-integer? right-dimension))
 	 (error "interval-projections: The second argument is not an exact integer: " interval right-dimension))
 	((not (< 0 right-dimension (##interval-dimension interval)))
 	 (error "interval-projections: The second argument is not between 0 and the dimension of the first argument (exclusive): " interval right-dimension))
@@ -328,7 +263,7 @@
 
 (define (translation? translation)
   (and (vector? translation)
-       (##vector-every ##exact-integer? translation)))
+       (##vector-every exact-integer? translation)))
 
 (define (interval-translate interval translation)
   (cond ((not (interval? interval))
@@ -342,15 +277,15 @@
 	 (##interval-translate interval translation))))
 
 (define (##interval-translate Interval translation)
-  (make-##interval (##vector-map + (interval-lower-bounds->vector Interval) translation)
-		   (##vector-map + (interval-upper-bounds->vector Interval) translation)))
+  (make-##interval (vector-map + (interval-lower-bounds->vector Interval) translation)
+		   (vector-map + (interval-upper-bounds->vector Interval) translation)))
 
 (define (##interval-scale interval scales)
   (let* ((uppers (##interval-upper-bounds->vector interval))
          (lowers (##interval-lower-bounds->vector interval))
-         (new-uppers (##vector-map (lambda (u s)
-                                    (quotient (+ u s -1) s))
-                                   uppers scales)))
+         (new-uppers (vector-map (lambda (u s)
+                                   (quotient (+ u s -1) s))
+                                 uppers scales)))
     (make-##interval lowers new-uppers)))
 
 (define (interval-scale interval scales)
@@ -358,7 +293,7 @@
                    (##vector-every zero? (interval-lower-bounds->vector interval))))
          (error "interval-scale: The first argument is not an interval with all lower bounds zero: " interval scales))
         ((not (and (vector? scales)
-                   (##vector-every ##exact-integer? scales)
+                   (##vector-every exact-integer? scales)
                    (##vector-every positive? scales)))
          (error "interval-scale: The second argument is not a vector of positive, exact, integers: " interval scales))
         ((not (= (vector-length scales) (interval-dimension interval)))
@@ -368,8 +303,8 @@
          (##interval-scale interval scales))))
 
 (define (##interval-cartesian-product intervals)
-  (make-##interval (##vector-append* (map ##interval-lower-bounds intervals))
-                   (##vector-append* (map ##interval-upper-bounds intervals))))
+  (make-##interval (append-vectors (map ##interval-lower-bounds intervals))
+                   (append-vectors (map ##interval-upper-bounds intervals))))
 
 (define (interval-cartesian-product interval . intervals)
   (let ((intervals (cons interval intervals)))
@@ -382,18 +317,18 @@
   (cond ((not (interval? interval))
 	 (error "interval-dilate: The first argument is not an interval: " interval lower-diffs upper-diffs))
 	((not (and (vector? lower-diffs)
-                   (##vector-every ##exact-integer? lower-diffs)))
+                   (##vector-every exact-integer? lower-diffs)))
 	 (error "interval-dilate: The second argument is not a vector of exact integers: " interval lower-diffs upper-diffs))
 	((not (and (vector? upper-diffs)
-                   (##vector-every ##exact-integer? upper-diffs)))
+                   (##vector-every exact-integer? upper-diffs)))
 	 (error "interval-dilate: The third argument is not a vector of exact integers: " interval lower-diffs upper-diffs))
 	((not (= (vector-length lower-diffs)
 		 (vector-length upper-diffs)
 		 (##interval-dimension interval)))
 	 (error "interval-dilate: The second and third arguments must have the same length as the dimension of the first argument: " interval lower-diffs upper-diffs))
 	(else
-	 (let ((new-lower-bounds (##vector-map + (##interval-lower-bounds interval) lower-diffs))
-	       (new-upper-bounds (##vector-map + (##interval-upper-bounds interval) upper-diffs)))
+	 (let ((new-lower-bounds (vector-map + (##interval-lower-bounds interval) lower-diffs))
+	       (new-upper-bounds (vector-map + (##interval-upper-bounds interval) upper-diffs)))
 	   (if (##vector-every < new-lower-bounds new-upper-bounds)
 	       (make-##interval new-lower-bounds new-upper-bounds)
 	       (error "interval-dilate: The resulting interval is empty: " interval lower-diffs upper-diffs))))))
@@ -437,8 +372,8 @@
 	 (##interval-subset? interval1 interval2))))
 
 (define (##interval-intersect intervals)
-  (let ((lower-bounds (apply ##vector-map max (map ##interval-lower-bounds intervals)))
-	(upper-bounds (apply ##vector-map min (map ##interval-upper-bounds intervals))))
+  (let ((lower-bounds (apply vector-map max (map ##interval-lower-bounds intervals)))
+	(upper-bounds (apply vector-map min (map ##interval-upper-bounds intervals))))
     (and (##vector-every < lower-bounds upper-bounds)
 	 (make-##interval lower-bounds upper-bounds))))
 
@@ -501,7 +436,7 @@
 	   (cond ((not (= (##interval-dimension interval)
 			  (length multi-index)))
 		  (apply error "interval-contains-multi-index?: dimension of interval does not match number of arguments: " interval multi-index))
-		 ((not (##every ##exact-integer? multi-index))
+		 ((not (##every exact-integer? multi-index))
 		  (apply error "interval-contains-multi-index?: at least one multi-index component is not an exact integer: " interval multi-index))
 		 (else
 		  (##interval-contains-multi-index?-general interval multi-index)))))))
@@ -886,51 +821,51 @@
 	    '(#f       0  0   0   0   0   0   0   0 0.0 0.0)
 	    `((lambda (x) #t)                             ; generic
 	      (lambda (x)                                 ; s8
-		(and (##fixnum? x)
+		(and (fixnum? x)
 		     (fx<= ,(- (expt 2 7))
 			   x
 			   ,(- (expt 2 7) 1))))
 	      (lambda (x)                                ; u8
-		(and (##fixnum? x)
+		(and (fixnum? x)
 		     (fx<= 0
 			   x
 			   ,(- (expt 2 8) 1))))
 	      (lambda (x)                               ; s16
-		(and (##fixnum? x)
+		(and (fixnum? x)
 		     (fx<= ,(- (expt 2 15))
 			   x
 			   ,(- (expt 2 15) 1))))
 	      (lambda (x)                               ; u16
-		(and (##fixnum? x)
+		(and (fixnum? x)
 		     (fx<= 0
 			   x
 			   ,(- (expt 2 16) 1))))
 	      (lambda (x)                               ; s32
 		(declare (generic))
-		(and (##exact-integer? x)
+		(and (exact-integer? x)
 		     (<= ,(- (expt 2 31))
 			 x
 			 ,(- (expt 2 31) 1))))
 	      (lambda (x)                               ; u32
 		(declare (generic))
-		(and (##exact-integer? x)
+		(and (exact-integer? x)
 		     (<= 0
 			 x
 			 ,(- (expt 2 32) 1))))
 	      (lambda (x)                              ; s64
 		(declare (generic))
-		(and (##exact-integer? x)
+		(and (exact-integer? x)
 		     (<= ,(- (expt 2 63))
 			 x
 			 ,(- (expt 2 63) 1))))
 	      (lambda (x)                              ; u64
 		(declare (generic))
-		(and (##exact-integer? x)
+		(and (exact-integer? x)
 		     (<= 0
 			 x
 			 ,(- (expt 2 64) 1))))
-	      (lambda (x) (##flonum? x))               ; f32
-	      (lambda (x) (##flonum? x))               ; f64
+	      (lambda (x) (flonum? x))               ; f32
+	      (lambda (x) (flonum? x))               ; f64
 	      ))))
 
 (make-standard-storage-classes)
@@ -960,7 +895,7 @@
 						 (fxnot  (fxarithmetic-shift-left 1 shift)))))))
    ;; checker
    (lambda (val)
-     (and (##fixnum? val)
+     (and (fixnum? val)
 	  (eq? 0 (fxand -2 val))))
    ;; maker:
    (lambda (size initializer)
@@ -1383,41 +1318,41 @@
     (let ((getter (if safe?
 		      (case (##interval-dimension domain)
 			((1)  (lambda (i)
-				(cond ((not (##exact-integer? i))
+				(cond ((not (exact-integer? i))
 				       (error "array-getter: multi-index component is not an exact integer: " i))
 				      ((not (##interval-contains-multi-index?-1 domain i))
 				       (error "array-getter: domain does not contain multi-index: "    domain i))
 				      (else
 				       (storage-class-getter body (indexer i))))))
 			((2)  (lambda (i j)
-				(cond ((not (and (##exact-integer? i)
-						 (##exact-integer? j)))
+				(cond ((not (and (exact-integer? i)
+						 (exact-integer? j)))
 				       (error "array-getter: multi-index component is not an exact integer: " i j))
 				      ((not (##interval-contains-multi-index?-2 domain i j))
 				       (error "array-getter: domain does not contain multi-index: "    domain i j))
 				      (else
 				       (storage-class-getter body (indexer i j))))))
 			((3)  (lambda (i j k)
-				(cond ((not (and (##exact-integer? i)
-						 (##exact-integer? j)
-						 (##exact-integer? k)))
+				(cond ((not (and (exact-integer? i)
+						 (exact-integer? j)
+						 (exact-integer? k)))
 				       (error "array-getter: multi-index component is not an exact integer: " i j k))
 				      ((not (##interval-contains-multi-index?-3 domain i j k))
 				       (error "array-getter: domain does not contain multi-index: "    domain i j k))
 				      (else
 				       (storage-class-getter body (indexer i j k))))))
 			((4)  (lambda (i j k l)
-				(cond ((not (and (##exact-integer? i)
-						 (##exact-integer? j)
-						 (##exact-integer? k)
-						 (##exact-integer? l)))
+				(cond ((not (and (exact-integer? i)
+						 (exact-integer? j)
+						 (exact-integer? k)
+						 (exact-integer? l)))
 				       (error "array-getter: multi-index component is not an exact integer: " i j k l))
 				      ((not (##interval-contains-multi-index?-4 domain i j k l))
 				       (error "array-getter: domain does not contain multi-index: "    domain i j k l))
 				      (else
 				       (storage-class-getter body (indexer i j k l))))))
 			(else (lambda multi-index
-				(cond ((not (##every ##exact-integer? multi-index))
+				(cond ((not (##every exact-integer? multi-index))
 				       (apply error "array-getter: multi-index component is not an exact integer: " multi-index))
 				      ((not (= (##interval-dimension domain) (length multi-index)))
 				       (apply error "array-getter: multi-index is not the correct dimension: " domain multi-index))
@@ -1434,7 +1369,7 @@
 	  (setter (if safe?
 		      (case (##interval-dimension domain)
 			((1)  (lambda (value i)
-				(cond ((not (##exact-integer? i))
+				(cond ((not (exact-integer? i))
 				       (error "array-setter: multi-index component is not an exact integer: " i))
 				      ((not (##interval-contains-multi-index?-1 domain i))
 				       (error "array-setter: domain does not contain multi-index: "    domain i))
@@ -1443,8 +1378,8 @@
 				      (else
 				       (storage-class-setter body (indexer i) value)))))
 			((2)  (lambda (value i j)
-				(cond ((not (and (##exact-integer? i)
-						 (##exact-integer? j)))
+				(cond ((not (and (exact-integer? i)
+						 (exact-integer? j)))
 				       (error "array-setter: multi-index component is not an exact integer: " i j))
 				      ((not (##interval-contains-multi-index?-2 domain i j))
 				       (error "array-setter: domain does not contain multi-index: "    domain i j))
@@ -1453,9 +1388,9 @@
 				      (else
 				       (storage-class-setter body (indexer i j) value)))))
 			((3)  (lambda (value i j k)
-				(cond ((not (and (##exact-integer? i)
-						 (##exact-integer? j)
-						 (##exact-integer? k)))
+				(cond ((not (and (exact-integer? i)
+						 (exact-integer? j)
+						 (exact-integer? k)))
 				       (error "array-setter: multi-index component is not an exact integer: " i j k))
 				      ((not (##interval-contains-multi-index?-3 domain i j k))
 				       (error "array-setter: domain does not contain multi-index: "    domain i j k))
@@ -1464,10 +1399,10 @@
 				      (else
 				       (storage-class-setter body (indexer i j k) value)))))
 			((4)  (lambda (value i j k l)
-				(cond ((not (and (##exact-integer? i)
-						 (##exact-integer? j)
-						 (##exact-integer? k)
-						 (##exact-integer? l)))
+				(cond ((not (and (exact-integer? i)
+						 (exact-integer? j)
+						 (exact-integer? k)
+						 (exact-integer? l)))
 				       (error "array-setter: multi-index component is not an exact integer: " i j k l))
 				      ((not (##interval-contains-multi-index?-4 domain i j k l))
 				       (error "array-setter: domain does not contain multi-index: "    domain i j k l))
@@ -1476,7 +1411,7 @@
 				      (else
 				       (storage-class-setter body (indexer i j k l) value)))))
 			(else (lambda (value . multi-index)
-				(cond ((not (##every ##exact-integer? multi-index))
+				(cond ((not (##every exact-integer? multi-index))
 				       (apply error "array-setter: multi-index component is not an exact integer: " multi-index))
 				      ((not (= (##interval-dimension domain) (length multi-index)))
 				       (apply error "array-setter: multi-index is not the correct dimension: " domain multi-index))
@@ -1885,7 +1820,7 @@
   (cond ((not (array? array))
          (error "array-tile: The first argument is not an array: " array sides))
         ((not (and (vector? sides)
-                   (##vector-every (lambda (x) (and (##exact-integer? x) (positive? x))) sides)))
+                   (##vector-every (lambda (x) (and (exact-integer? x) (positive? x))) sides)))
          (error "array-tile: The second argument is not a vector of exact positive integers: " array sides))
         ((not (fx= (array-dimension array)
                    (vector-length sides)))
@@ -1902,11 +1837,11 @@
                 (result-lower-bounds
                  (make-vector n 0))
                 (result-upper-bounds
-                 (##vector-map (lambda (l u s)
-                                 (quotient (fx+ (fx- u l)
-                                                (fx- s 1))
-                                           s))
-                               lower-bounds upper-bounds sides))
+                 (vector-map (lambda (l u s)
+                               (quotient (fx+ (fx- u l)
+                                              (fx- s 1))
+                                         s))
+                             lower-bounds upper-bounds sides))
                 (result-domain
                  (make-##interval result-lower-bounds result-upper-bounds)))
            
@@ -1925,16 +1860,10 @@
                                                    (error "Arghh!"))))
                                           args))))
 
-             (define (iota n)
-               ;; generates list of (- n 1) ... 0
-               (if (zero? n)
-                   '()
-                   (cons (- n 1) (iota (- n 1)))))
-      
-            `(case n
+             `(case n
                 ,@(map (lambda (k)
                          (let* ((indices
-                                 (reverse (iota k)))
+                                 (iota k))
                                 (args
                                  (map (lambda (j) (symbol-append 'i j)) indices))
                                 (lowers
@@ -1945,7 +1874,7 @@
                                  (map (lambda (j) (symbol-append 's j)) indices)))
                            `((,k)
                              (lambda ,args
-                               (if (not (and ,@(map (lambda (arg) `(##exact-integer? ,arg)) args)
+                               (if (not (and ,@(map (lambda (arg) `(exact-integer? ,arg)) args)
                                              (,(symbol-append '##interval-contains-multi-index?- k) result-domain ,@args)))
                                    (begin
                                      (pp (list 'error "array-tile: Index to result array is not valid: " domain sides result-domain ,@args))
@@ -1971,17 +1900,17 @@
                 (else
                  (lambda i
                    (if (not (and (= (length i) n)
-                                 (##every ##exact-integer? i)
+                                 (##every exact-integer? i)
                                  (##interval-contains-multi-index?-general result-domain i)))
                              (apply error "array-tile: Index to result array is not valid: " i)
                              (let* ((i (list->vector i))
                                     (subdomain (make-##interval
-                                                (##vector-map (lambda (l s i)
-                                                                (+ l (* s i)))
-                                                              lower-bounds sides i)
-                                                (##vector-map (lambda (l u s i)
-                                                                (min u (+ l (* s (+ i 1)))))
-                                                              lower-bounds upper-bounds sides i))))
+                                                (vector-map (lambda (l s i)
+                                                              (+ l (* s i)))
+                                                            lower-bounds sides i)
+                                                (vector-map (lambda (l u s i)
+                                                              (min u (+ l (* s (+ i 1)))))
+                                                            lower-bounds upper-bounds sides i))))
                                (##array-extract array subdomain)))))))
 
            (make-array result-domain (generate-result))))))
@@ -2072,26 +2001,12 @@
 
 (define-macro (setup-permuted-getters-and-setters)
 
-  (define (iota n)
-    ;; generates list of (- n 1) ... 0
-    (if (zero? n)
-	'()
-	(cons (- n 1) (iota (- n 1)))))
-
   (define (list-remove l i)
     ;; new list that removes (list-ref l i) from l
     (if (zero? i)
 	(cdr l)
 	(cons (car l)
 	      (list-remove (cdr l) (- i 1)))))
-
-  (define (list-take l i)
-    ;; makes new list of first i items of l
-    (if (zero? i)
-	'()
-	(cons (car l)
-	      (list-take (cdr l) (- i 1)))))
-
 
   (define (permutations l)
     ;; generates list of all permutations of l
@@ -2103,7 +2018,7 @@
 			       (map (lambda (tail)
 				      (cons x tail))
 				    (permutations rest))))
-			   (reverse (iota (length l)))))))
+			   (iota (length l))))))
 
   (define (concat . args)
     (string->symbol (apply string-append (map (lambda (s) (if (string? s) s (symbol->string s ))) args))))
@@ -2112,12 +2027,12 @@
     `(define (,(concat name '-permute) ,name permutation)
        (case (vector-length permutation)
 	 ,@(map (lambda (i)
-		  `((,i) (cond ,@(let ((args (list-take '(i j k l) i)))
+		  `((,i) (cond ,@(let ((args (take '(i j k l) i)))
 				   (map (lambda (perm permuted-args)
 					  `((equal? permutation ',(list->vector perm))
 					    (lambda ,(transform-arguments permuted-args)
 					      ,`(,name ,@(transform-arguments args)))))
-					(permutations (list-take '(0 1 2 3) i))
+					(permutations (take '(0 1 2 3) i))
 					(permutations args))))))
 		'(1 2 3 4))
 	 (else
@@ -2186,16 +2101,9 @@
 				    subtable))
 			     '(#t #f))))))
 
-  (define (iota n)
-    ;; generates list of (- n 1) ... 0
-    (if (zero? n)
-	'()
-	(cons (- n 1) (iota (- n 1)))))
-  
-  
   (define (generate-code-for-fixed-n name transformer n)
     (let ((zero-to-n-1
-	   (reverse (iota n)))
+	   (iota n))
 	  (table
 	   (truth-table n)))
       `((,n) (let (,@(map (lambda (k)
@@ -2292,27 +2200,11 @@
 			 ((number? x) (number->string x))))
 		 args))))
   
-  (define (take l n)
-    (if (zero? n)
-        '()
-        (cons (car l) (take (cdr l) (- n 1)))))
-  
-  (define (remove l n)
-    (if (zero? n)
-        l
-        (remove (cdr l) (- n 1))))
-  
   (define (first-half l)
     (take l (quotient (length l) 2)))
   
   (define (second-half l)
-    (remove l (quotient (length l) 2)))
-  
-  (define (iota n)
-    ;; generates list of (- n 1) ... 0
-    (if (zero? n)
-	'()
-	(cons (- n 1) (iota (- n 1)))))
+    (drop l (quotient (length l) 2)))
   
   (define (arg-lists ks)
     (if (null? ks)
@@ -2338,7 +2230,7 @@
 
   (define (code-for-one-n name transformer n)
     (let* ((zero-to-n-1
-            (reverse (iota n)))
+            (iota n))
            (arg-list
             (map (lambda (k)
                    (make-symbol 'i_ k))
@@ -2411,7 +2303,7 @@
                    (##vector-every zero? (interval-lower-bounds->vector (array-domain array)))))
          (error "array-sample: The first argument is an array whose domain has nonzero lower bounds: " array scales))
         ((not (and (vector? scales)
-                   (##vector-every ##exact-integer? scales)
+                   (##vector-every exact-integer? scales)
                    (##vector-every positive? scales)))
          (error "array-sample: The second argument is not a vector of positive, exact, integers: " array scales))
         ((not (= (vector-length scales) (array-dimension array)))
@@ -2425,14 +2317,6 @@
          (##immutable-array-sample array scales))))
 
 (define (##array-outer-product combiner array1 array2)
-
-  (define (list-take l n)
-    (if (fxzero? n)
-        '()
-        (cons (car l)
-              (list-take (cdr l)
-                         (fx- n 1)))))
-  
   (let* ((domain1 (array-domain array1))
          (domain2 (array-domain array2))
          (getter1 (array-getter array1))
@@ -2489,8 +2373,8 @@
                             (apply getter2 rest))))))
             (else
              (lambda args
-               (combiner (apply getter1 (list-take args dimension1))
-                         (apply getter2 (list-tail args dimension1))))))))
+               (combiner (apply getter1 (take args dimension1))
+                         (apply getter2 (drop args dimension1))))))))
     (make-array result-domain result-getter)))
 
 (define (array-outer-product combiner array1 array2)
@@ -2594,7 +2478,7 @@
 (define (array-curry array right-dimension)
   (cond ((not (array? array))
 	 (error "array-curry: The first argument is not an array: " array right-dimension))
-	((not (##exact-integer? right-dimension))
+	((not (exact-integer? right-dimension))
 	 (error "array-curry: The second argument is not an exact integer: " array right-dimension))
 	((not (< 0 right-dimension (##interval-dimension (array-domain array))))
 	 (error "array-curry: The second argument is not between 0 and (interval-dimension (array-domain array)) (exclusive): " array right-dimension))

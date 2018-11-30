@@ -34,10 +34,7 @@
        ((= ,var ,n))
      ,@body))
 
-(define (make-list n #!optional (item #f))
-  (if (zero? n)
-      '()
-      (cons item (make-list (- n 1) item))))
+;;; requires make-list function
 
 (define (random a #!optional b)
   (if b
@@ -236,10 +233,10 @@
      (interval-projections (make-interval (list->vector lower)
                                           (list->vector upper))
                            right-dimension)
-     (list (make-interval (list->vector (reverse (list-tail (reverse lower) (- (length lower) left-dimension))))
-			  (list->vector (reverse (list-tail (reverse upper) (- (length upper) left-dimension)))))
-	   (make-interval (list->vector (list-tail lower left-dimension))
-			  (list->vector (list-tail upper left-dimension)))))))
+     (list (make-interval (list->vector (take lower left-dimension))
+			  (list->vector (take upper left-dimension)))
+	   (make-interval (list->vector (drop lower left-dimension))
+			  (list->vector (drop upper left-dimension)))))))
 
 
 (pp "interval-contains-multi-index? error tests")
@@ -341,19 +338,19 @@
 (test (interval-for-each 1 (make-interval '#(3) '#(4)))
       "interval-for-each: Argument is not a procedure: ")
 
-(define (iota a b)
+(define (local-iota a b)
   (if (= a b)
       '()
-      (cons a (iota (+ a 1) b))))
+      (cons a (local-iota (+ a 1) b))))
 
 (define (all-elements lower upper)
   (if (null? (cdr lower))
-      (map list (iota (car lower) (car upper)))
+      (map list (local-iota (car lower) (car upper)))
       (apply append (map (lambda (x)
 			   (map (lambda (y)
 				  (cons x y))
 				(all-elements (cdr lower) (cdr upper))))
-			 (iota (car lower) (car upper))))))
+			 (local-iota (car lower) (car upper))))))
 
 (pp "interval-for-each result tests")
 
@@ -423,9 +420,9 @@
 (define (random-subinterval interval)
   (let* ((lowers (interval-lower-bounds->vector interval))
          (uppers (interval-upper-bounds->vector interval))
-         (new-lowers (##vector-map random lowers uppers))
-         (new-uppers (##vector-map (lambda (x) (+ x 1))
-                                   (##vector-map random new-lowers uppers)))
+         (new-lowers (vector-map random lowers uppers))
+         (new-uppers (vector-map (lambda (x) (+ x 1))
+                                 (vector-map random new-lowers uppers)))
          (subinterval (make-interval new-lowers new-uppers)))
     subinterval))
                                  
@@ -445,9 +442,9 @@
 		   (list->vector upper))))
 
 (define (random-positive-vector n #!optional (max 5))
-  (##vector-map (lambda (x)
-                  (random 1 max))
-                (make-vector n)))
+  (vector-map (lambda (x)
+                (random 1 max))
+              (make-vector n)))
 
 (define (random-boolean)
   (zero? (random 2)))
@@ -578,15 +575,15 @@
 	 (coefficients
 	  (map (lambda (x) (* (random-sign)
 			      (random 20)))
-	       (iota 0 old-domain-dimension)))
+	       (local-iota 0 old-domain-dimension)))
 	 (old-indexer
 	  (lambda args
 	    (apply + base (map * args coefficients))))
 	 (new-domain->old-domain-coefficients
 	  (map (lambda (x)
 		 (map (lambda (x) (* (random-sign) (random 10)))
-		      (iota 0 new-domain-dimension)))
-	       (iota 0 old-domain-dimension)))
+		      (local-iota 0 new-domain-dimension)))
+	       (local-iota 0 old-domain-dimension)))
 	 (new-domain->old-domain
 	  (lambda args
 	    (apply values (map (lambda (row)
@@ -1003,7 +1000,7 @@
 							   (cadr array-builder))
 					       (car array-builder)
 					       )))
-		 (iota 0 (random 1 7))))
+		 (local-iota 0 (random 1 7))))
 	   (result-array-1
 	    (apply array-map
 		   list
@@ -1072,7 +1069,7 @@
 							   (cadr array-builder))
 					       (car array-builder)
 					       )))
-		 (iota 0 (random 1 7))))
+		 (local-iota 0 (random 1 7))))
 	   (result-array-1
 	    (apply array-map
 		   list
@@ -1269,9 +1266,9 @@
 			       'a)
       "specialized-array-share: safe? is not a boolean: ")
 
-(test (myarray= (list->specialized-array (reverse (iota 0 10))
+(test (myarray= (list->specialized-array (reverse (local-iota 0 10))
 					 (make-interval '#(0) '#(10)))
-		(specialized-array-share (list->specialized-array (iota 0 10)
+		(specialized-array-share (list->specialized-array (local-iota 0 10)
 								  (make-interval '#(0) '#(10)))
 					 (make-interval '#(0) '#(10))
 					 (lambda (i)
@@ -1318,7 +1315,7 @@
 
 (do ((i 0 (+ i 1)))
     ((= i tests))
-  (let* ((axes (iota 0 (random 1 5)))
+  (let* ((axes (local-iota 0 (random 1 5)))
 	 (lower-bounds (list->vector (map (lambda (x) (random -10 10)) axes)))
 	 (upper-bounds (list->vector (map (lambda (l) (+ l (random 1 4))) (vector->list lower-bounds))))
 	 (a (array->specialized-array (make-array (make-interval lower-bounds
@@ -1369,7 +1366,7 @@
 
 (do ((i 0 (+ i 1)))
     ((= i tests))
-  (let* ((axes (iota 0 (random 1 5)))
+  (let* ((axes (local-iota 0 (random 1 5)))
 	 (lower-bounds (list->vector (map (lambda (x) (random -10 10)) axes)))
 	 (upper-bounds (list->vector (map (lambda (l) (+ l (random 1 4))) (vector->list lower-bounds))))
 	 (a (array->specialized-array (make-array (make-interval lower-bounds
@@ -1438,10 +1435,10 @@
 	   (upper-bounds (interval-upper-bounds->vector int))
 	   (translation (list->vector (map (lambda (x)
 					     (random -10 10))
-					   (iota 0 (vector-length lower-bounds))))))
+					   (local-iota 0 (vector-length lower-bounds))))))
       (interval= (interval-translate int translation)
-		 (make-interval (##vector-map + lower-bounds translation)
-				(##vector-map + upper-bounds translation))))))
+		 (make-interval (vector-map + lower-bounds translation)
+				(vector-map + upper-bounds translation))))))
 
 (let* ((specialized-array (array->specialized-array (make-array (make-interval '#(0 0) '#(10 12))
 								list)))
@@ -1734,12 +1731,12 @@
   
   (let ((new-uppers (let ((uppers (map interval-upper-bounds->vector args)))
 		      (fold-left (lambda (arg result)
-				   (##vector-map min arg result))
+				   (vector-map min arg result))
 				 (car uppers)
 				 uppers)))
 	(new-lowers (let ((lowers (map interval-lower-bounds->vector args)))
 		      (fold-left (lambda (arg result)
-				   (##vector-map max arg result))
+				   (vector-map max arg result))
 				 (car lowers)
 				 lowers))))
     ;; (pp (list args new-lowers new-uppers (vector-every < new-lowers new-uppers)))
@@ -1753,7 +1750,7 @@
 	 (number-of-intervals (random 1 4))
 	 (intervals (map (lambda (x)
 			   (random-interval dimension (+ dimension 1)))
-			 (iota 0 number-of-intervals))))
+			 (local-iota 0 number-of-intervals))))
     ;; (pp (list intervals (apply my-interval-intersect intervals)))
     (test (apply my-interval-intersect intervals)
 	  (apply interval-intersect intervals))))
@@ -1788,10 +1785,10 @@
 
 (define (myinterval-scale interval scales)
   (make-interval (interval-lower-bounds->vector interval)
-                 (##vector-map (lambda (u s)
-                                 (quotient (+ u s -1) s))
-                               (interval-upper-bounds->vector interval)
-                               scales)))
+                 (vector-map (lambda (u s)
+                               (quotient (+ u s -1) s))
+                             (interval-upper-bounds->vector interval)
+                             scales)))
 
 (do ((i 0 (fx+ i 1)))
     ((fx= i tests))
@@ -1959,25 +1956,25 @@
          (uppers
           (##interval-upper-bounds domain))
          (result-lowers
-          (##vector-map (lambda (x)
-                          0)
-                        lowers))
+          (vector-map (lambda (x)
+                        0)
+                      lowers))
          (result-uppers
-          (##vector-map (lambda (l u s)
-                          (ceiling-quotient (- u l) s))
-                        lowers uppers sidelengths)))
+          (vector-map (lambda (l u s)
+                        (ceiling-quotient (- u l) s))
+                      lowers uppers sidelengths)))
     (make-array (make-interval result-lowers result-uppers)
                 (lambda i
                   (let* ((vec-i
                           (list->vector i))
                          (result-lowers
-                          (##vector-map (lambda (l i s)
-                                          (+ l (* i s)))
-                                        lowers vec-i sidelengths))
+                          (vector-map (lambda (l i s)
+                                        (+ l (* i s)))
+                                      lowers vec-i sidelengths))
                          (result-uppers
-                          (##vector-map (lambda (l u i s)
-                                          (min u (+ l (* (+ i 1) s))))
-                                        lowers uppers vec-i sidelengths)))
+                          (vector-map (lambda (l u i s)
+                                        (min u (+ l (* (+ i 1) s))))
+                                      lowers uppers vec-i sidelengths)))
                     (array-extract array
                                    (make-interval result-lowers result-uppers)))))))
 
@@ -2001,7 +1998,7 @@
          (uppers
           (##interval-upper-bounds domain))
          (sidelengths
-          (##vector-map (lambda (l u)
+          (vector-map (lambda (l u)
                         (let ((dim (- u l)))
                           (random 1 (ceiling-quotient (* dim 7) 5))))
                       lowers uppers))
@@ -2092,7 +2089,7 @@
                            (make-array (array-domain temp)
                                        (array-getter temp)
                                        (array-setter temp)))))))
-         (flips (##vector-map (lambda (x) (random-boolean)) (make-vector (interval-dimension domain))))
+         (flips (vector-map (lambda (x) (random-boolean)) (make-vector (interval-dimension domain))))
          (reversed-array (array-reverse Array flips))
          (my-reversed-array (myarray-reverse Array flips)))
     
@@ -2488,8 +2485,6 @@
 (test (operator-max-norm m) 1940.)
 
 (test (operator-one-norm m) 1605.)
-
-(define vector-map ##vector-map)
 
 (define (all-second-differences image direction)
   (let ((image-domain (array-domain image)))
