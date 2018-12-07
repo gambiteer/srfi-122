@@ -54,7 +54,7 @@
 	(else
 	 (every-general (cons vec (cons vec2 vecs)) (- (vector-length vec) 1)))))
 
-;;; requires vector-map function
+;;; requires vector-map, vector-copy function
 
 ;;; requires append-vectors function
 
@@ -110,10 +110,10 @@
   (vector-ref (##interval-upper-bounds interval) i))
 
 (define (##interval-lower-bounds->vector interval)
-  (##vector-copy (##interval-lower-bounds interval)))
+  (vector-copy (##interval-lower-bounds interval)))
 
 (define (##interval-upper-bounds->vector interval)
-  (##vector-copy (##interval-upper-bounds interval)))
+  (vector-copy (##interval-upper-bounds interval)))
 
 (define (##interval-lower-bounds->list interval)
   (vector->list (##interval-lower-bounds interval)))
@@ -368,6 +368,9 @@
   (cond ((not (and (interval? interval1)
 		   (interval? interval2)))
 	 (error "interval-subset?: Not all arguments are intervals: " interval1 interval2))
+        ((not (= (##interval-dimension interval1)
+                 (##interval-dimension interval2)))
+         (error "interval-subset?: The arguments do not have the same dimension: " interval1 interval2))
 	(else
 	 (##interval-subset? interval1 interval2))))
 
@@ -1811,6 +1814,9 @@
 	 (error "array-extract: The first argument is not an array: " array new-domain))
 	((not (interval? new-domain))
 	 (error "array-extract: The second argument is not an interval: " array new-domain))
+        ((not (= (##interval-dimension (array-domain array))
+                 (##interval-dimension new-domain)))
+         (error "array-extract: The dimension of the second argument (an interval) does not equal the dimension of the domain of the first argument (an array): " array new-domain))
 	((not (##interval-subset? new-domain (array-domain array)))
 	 (error "array-extract: The second argument (an interval) is not a subset of the domain of the first argument (an array): " array new-domain))
 	(else

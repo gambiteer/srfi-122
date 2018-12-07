@@ -1,6 +1,6 @@
 (declare (standard-bindings)(extended-bindings)(block)(safe) (mostly-fixnum))
 (declare (inlining-limit 0))
-(define tests 1000)
+(define tests 10000)
 
 (define-macro (test expr value)
   `(let* (;(ignore (pretty-print ',expr))
@@ -288,6 +288,10 @@
 
 (test (interval-subset? (make-interval '#(1 2 3) '#(4 5 6)) #f)
       "interval-subset?: Not all arguments are intervals: ")
+
+(test (interval-subset? (make-interval '#(1) '#(2))
+                        (make-interval '#(0 0) '#(1 2)))
+      "interval-subset?: The arguments do not have the same dimension: ")
 
 (pp "interval-subset? result tests")
 
@@ -1870,6 +1874,20 @@
 
 (pp "test array-extract and array-tile")
 
+(test (array-extract (make-array (make-interval '#(0 0) '#(1 1)) list)
+                     'a)
+      "array-extract: The second argument is not an interval: ")
+
+(test (array-extract 'a (make-interval '#(0 0) '#(1 1)))
+      "array-extract: The first argument is not an array: ")
+
+(test (array-extract (make-array (make-interval '#(0 0) '#(1 1)) list)
+                     (make-interval '#(0) '#(1)))
+      "array-extract: The dimension of the second argument (an interval) does not equal the dimension of the domain of the first argument (an array): ")
+
+(test (array-extract (make-array (make-interval '#(0 0) '#(1 1)) list)
+                     (make-interval '#(0 0) '#(1 3)))
+      "array-extract: The second argument (an interval) is not a subset of the domain of the first argument (an array): ")
 (do ((i 0 (fx+ i 1)))
     ((fx= i tests))
   (let* ((domain (random-interval))
