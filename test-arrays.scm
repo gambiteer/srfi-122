@@ -2675,6 +2675,7 @@
 
  
 (define (array-display A)
+  ;; Displays a two-dimensional array row by row.
   (array-for-each (lambda (row)
                     (array-for-each (lambda (x)
                                       (display x)
@@ -2709,8 +2710,8 @@
               ;; the row to the right of the (i,i) entry
               (specialized-array-share A
                                        column/row-domain
-                                       (lambda (j)
-                                         (values i j))))
+                                       (lambda (k)
+                                         (values i k))))
 
              ;; the subarray to the right and
              ;;below the (i,i) entry
@@ -2734,6 +2735,7 @@
                     (array-outer-product * column row)))))))
 
 (define A
+  ;; A Hilbert matrix
   (array->specialized-array
    (make-array (make-interval '#(0 0)
                               '#(4 4))
@@ -2748,3 +2750,53 @@
 (display "\nLU decomposition of Hilbert matrix:\n\n")
 
 (array-display A)
+
+;;; Functions to extract the lower- and upper-triangular
+;;; matrices of the LU decomposition of A.
+
+(define (L a)
+  (let ((a_ (array-getter a))
+        (d  (array-domain a)))
+    (make-array
+     d
+     (lambda (i j)
+       (cond ((= i j) 1)        ;; diagonal
+             ((> i j) (a_ i j)) ;; below diagonal
+             (else 0))))))      ;; above diagonal
+
+(define (U a)
+  (let ((a_ (array-getter a))
+        (d  (array-domain a)))
+    (make-array
+     d
+     (lambda (i j)
+       (cond ((<= i j) (a_ i j)) ;; diagonal and above
+             (else 0))))))       ;; below diagonal
+
+(display "\nLower triangular matrix of decomposition of Hilbert matrix:\n\n")
+(array-display (L A))
+
+(display "\nUpper triangular matrix of decomposition of Hilbert matrix:\n\n")
+(array-display (U A))
+
+;;; We'll define a brief, not-very-efficient matrix multiply routine.
+
+(define (dot-product a b)
+  (array-fold + 0 (array-map * a b)))
+
+(define (matrix-multiply a b)
+  (let ((a-rows
+         (array-curry a 1))
+        (b-columns
+         (array-curry (array-permute b '#(1 0)) 1)))
+    (array-outer-product dot-product a-rows b-columns)))
+
+;;; We'll check that the product of the result of LU
+;;; decomposition of A is again A.
+
+(define product (matrix-multiply (L A) (U A)))
+
+(display "\nProduct of lower and upper triangular matrices ")
+(display "of LU decomposition of Hilbert matrix:\n\n")
+(array-display product)
+

@@ -82,7 +82,7 @@ MathJax.Hub.Config({
         (<ul>
          (<li> "The procedures "(<code>'interval-cartesian-product)", "(<code>'array-outer-product)", "(<code>'array-tile)", and "(<code>'array-assign!)" have been added.")
          (<li> "The discussion of Haar transforms as examples of separable transforms has been corrected.")
-         (<li> "The sample procedure "(<code>'LU-decomposition)" has been added to this document and test-arrays.scm."))
+         (<li> "Some matrix examples have been added to this document and test-arrays.scm."))
 
 	(<h2> "Abstract")
 	(<p> 
@@ -91,8 +91,10 @@ MathJax.Hub.Config({
 	 "$i_0,\\ldots,i_{d-1}$ that are valid for a given array form the "(<i>'domain)" of the array.  In this SRFI, each array's domain consists "
 	 " of a rectangular interval $[l_0,u_0)\\times[l_1,u_1)\\times\\cdots\\times[l_{d-1},u_{d-1})$, a subset of $\\mathbb Z^d$, $d$-tuples of "
 	 "integers.  Thus, we introduce a data type "
-	 "called "(<i> 'intervals)", which encapsulate the cross product of nonempty intervals of exact integers. "
-	 "Specialized variants of arrays are specified to provide portable programs with efficient representations for common use cases.")
+	 "called "(<i> 'intervals)", which encapsulate the cross product of nonempty intervals of exact integers. (We take this terminology from "
+         "Chapter 3, Section 7 of Elias Zakon's "(<a> href: "http://www.trillia.com/zakon1.html" "Basic Concepts of Mathematics")
+         " and Chapter 7, Section 1 of "(<a> href: "http://www.trillia.com/zakon-analysisII.html" "Mathematical Analysis II")", by the same author.) "
+         "Specialized variants of arrays are specified to provide portable programs with efficient representations for common use cases.")
         (<h2> "Motivation")
         (<p> "This SRFI was motivated by a number of somewhat independent notions, which we outline here and which are explained below.")
         (<ul>
@@ -1818,7 +1820,8 @@ Reconstructed image:
 ")
 (<p> "You see in this example that this particular image has two, not one, nonzero coefficients in the two-dimensional Haar transform, which is again approximately orthonormal.")
 
-(<p> (<b> "Gaussian elimination. ")"Given a square matrix $A$ we can overwrite $A$ with lower-triangular matrix $L$ with ones on the diagonal and upper-triangular
+(<p> (<b> "Matrix multiplication and Gaussian elimination. ")"While we have avoided conflating matrices and arrays, we give here some examples of matrix operations defined using operations from this SRFI.")
+(<p> "Given a nonsingular square matrix $A$ we can overwrite $A$ with lower-triangular matrix $L$ with ones on the diagonal and upper-triangular
 matrix $U$ so that $A=LU$ as follows. (We assume \"pivoting\" isn't needed.) For example, if "
      "$$A=\\begin{pmatrix} a_{11}&a_{12}&a_{13}\\\\ a_{21}&a_{22}&a_{23}\\\\ a_{31}&a_{32}&a_{33}\\end{pmatrix}=\\begin{pmatrix} 1&0&0\\\\ \\ell_{21}&1&0\\\\ \\ell_{31}&\\ell_{32}&1\\end{pmatrix}\\begin{pmatrix} u_{11}&u_{12}&u_{13}\\\\ 0&u_{22}&u_{23}\\\\ 0&0&u_{33}\\end{pmatrix}$$ then $A$ is overwritten with
 $$
@@ -1853,8 +1856,8 @@ The code uses "(<code>'array-assign!)", "(<code>'specialized-array-share)", "(<c
               ;; the row to the right of the (i,i) entry
               (specialized-array-share A
                                        column/row-domain
-                                       (lambda (j)
-                                         (values i j))))
+                                       (lambda (k)
+                                         (values i k))))
 
              ;; the subarray to the right and
              ;;below the (i,i) entry
@@ -1917,8 +1920,77 @@ The code uses "(<code>'array-assign!)", "(<code>'specialized-array-share)", "(<c
 ;;; 1/4     9/10    3/2     1/2800
 
 "))
-            
-            
+(<p> "We can now define matrix multiplication as follows to check our result:")
+(<pre>
+ (<code>"
+;;; Functions to extract the lower- and upper-triangular
+;;; matrices of the LU decomposition of A.
+
+(define (L a)
+  (let ((a_ (array-getter a))
+        (d  (array-domain a)))
+    (make-array
+     d
+     (lambda (i j)
+       (cond ((= i j) 1)        ;; diagonal
+             ((> i j) (a_ i j)) ;; below diagonal
+             (else 0))))))      ;; above diagonal
+
+(define (U a)
+  (let ((a_ (array-getter a))
+        (d  (array-domain a)))
+    (make-array
+     d
+     (lambda (i j)
+       (cond ((<= i j) (a_ i j)) ;; diagonal and above
+             (else 0))))))       ;; below diagonal
+
+(display \"\\nLower triangular matrix of decomposition of Hilbert matrix:\\n\\n\")
+(array-display (L A))
+
+;;; which displays:
+;;; 1       0       0       0
+;;; 1/2     1       0       0
+;;; 1/3     1       1       0
+;;; 1/4     9/10    3/2     1
+
+
+(display \"\\nUpper triangular matrix of decomposition of Hilbert matrix:\\n\\n\")
+(array-display (U A))
+
+;;; which displays:
+;;; 1       1/2     1/3     1/4
+;;; 0       1/12    1/12    3/40
+;;; 0       0       1/180   1/120
+;;; 0       0       0       1/2800
+
+;;; We'll define a brief, not-very-efficient matrix multiply routine.
+
+(define (dot-product a b)
+  (array-fold + 0 (array-map * a b)))
+
+(define (matrix-multiply a b)
+  (let ((a-rows
+         (array-curry a 1))
+        (b-columns
+         (array-curry (array-permute b '#(1 0)) 1)))
+    (array-outer-product dot-product a-rows b-columns)))
+
+;;; We'll check that the product of the result of LU
+;;; decomposition of A is again A.
+
+(define product (matrix-multiply (L A) (U A)))
+
+(display \"\\nProduct of lower and upper triangular matrices \\n\")
+(display \"of LU decomposition of Hilbert matrix:\\n\\n\")
+(array-display product)
+
+;;; which displays:
+;;; 1       1/2     1/3     1/4
+;;; 1/2     1/3     1/4     1/5
+;;; 1/3     1/4     1/5     1/6
+;;; 1/4     1/5     1/6     1/7
+"))
         
 
 (<h2> "Acknowledgments")
