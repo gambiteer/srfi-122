@@ -80,6 +80,7 @@ MathJax.Hub.Config({
         (<h2> "Post-finalization note")
         (<p> "This document, the associated implementation in generic-arrays.scm, and the test file test-arrays.scm differ from the finalized SRFI-122 in the following ways:")
         (<ul>
+         (<li> "The abstract has been rewritten to make it more precise.")
          (<li> "The procedures "(<code>'interval-cartesian-product)", "(<code>'array-outer-product)", "(<code>'array-tile)", and "(<code>'array-assign!)" have been added.")
          (<li> "The discussion of Haar transforms as examples of separable transforms has been corrected.")
          (<li> "Some matrix examples have been added to this document and test-arrays.scm."))
@@ -89,11 +90,10 @@ MathJax.Hub.Config({
 	 "This SRFI specifies an array mechanism for Scheme. Arrays as defined here are quite general; at their most basic, an array is simply a "
 	 "mapping, or function, from multi-indices of exact integers $i_0,\\ldots,i_{d-1}$ to Scheme values.  The set of multi-indices "
 	 "$i_0,\\ldots,i_{d-1}$ that are valid for a given array form the "(<i>'domain)" of the array.  In this SRFI, each array's domain consists "
-	 " of a rectangular interval $[l_0,u_0)\\times[l_1,u_1)\\times\\cdots\\times[l_{d-1},u_{d-1})$, a subset of $\\mathbb Z^d$, $d$-tuples of "
+	 " of the cross product of nonempty intervals of exact integers $[l_0,u_0)\\times[l_1,u_1)\\times\\cdots\\times[l_{d-1},u_{d-1})$ of $\\mathbb Z^d$, $d$-tuples of "
 	 "integers.  Thus, we introduce a data type "
-	 "called "(<i> 'intervals)", which encapsulate the cross product of nonempty intervals of exact integers. (We take this terminology from "
-         "Chapter 3, Section 7 of Elias Zakon's "(<a> href: "http://www.trillia.com/zakon1.html" "Basic Concepts of Mathematics")
-         " and Chapter 7, Section 1 of "(<a> href: "http://www.trillia.com/zakon-analysisII.html" "Mathematical Analysis II")", by the same author.) "
+	 "called $d$-"(<i> 'intervals)", or more briefly "(<i>'intervals)", which encapsulates this notion. (We borrow this terminology from, e.g., "
+         " Elias Zakon's "(<a> href: "http://www.trillia.com/zakon-analysisII.html" "Mathematical Analysis II")".) "
          "Specialized variants of arrays are specified to provide portable programs with efficient representations for common use cases.")
         (<h2> "Motivation")
         (<p> "This SRFI was motivated by a number of somewhat independent notions, which we outline here and which are explained below.")
@@ -140,7 +140,7 @@ MathJax.Hub.Config({
 	     "well as upper bounds, so domains are rectangular, $d$-dimensional intervals $[l_0,u_0)\\times\\cdots\\times[l_{d-1},u_{d-1})$.")
 	(<p> "Second, we introduce the notion of a "(<i>"storage class")", an object that contains functions that manipulate, store, check, etc., different types of values. "
 	     "A "(<code>'generic-storage-class)" can manipulate any Scheme value, "
-	     "whereas,e.g., a "(<code>'u1-storage-class)" can store only the values 0 and 1 in each element of a body.")
+	     "whereas, e.g., a "(<code>'u1-storage-class)" can store only the values 0 and 1 in each element of a body.")
 	(<p> "We also require that our affine maps be one-to-one, so that if $\\vec i\\neq\\vec j$ then $T(\\vec i)\\neq T(\\vec j)$.  Without this property, modifying "
 	     "the $\\vec i$th component of $A$ would cause the $\\vec j$th component to change.")
 	(<h3> "Common transformations on Bawden-style arrays")
