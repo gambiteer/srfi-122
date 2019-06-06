@@ -83,6 +83,7 @@ MathJax.Hub.Config({
          (<li> "The abstract has been rewritten to make it more precise.")
          (<li> "The procedures "(<code>'interval-for-each)", "(<code>'interval-cartesian-product)", "(<code>'array-outer-product)", "(<code>'array-tile)", "(<code>'array-assign!)", and "(<code>'array-swap!)" have been added.")
          (<li> "The discussion of Haar transforms as examples of separable transforms has been corrected.")
+         (<li> "The documentation has a few more examples of image processing algorithms.")
          (<li> "Some matrix examples have been added to this document and test-arrays.scm."))
 
 	(<h2> "Abstract")
