@@ -40,11 +40,11 @@
     <p>This document, the associated implementation in generic-arrays.scm, and the test file test-arrays.scm differ from the finalized SRFI-122 in the following ways:</p>
     <ul>
       <li>The abstract has been rewritten to make it more precise.</li>
-      <li>The procedures <code>interval-cartesian-product</code>, <code>array-outer-product</code>, <code>array-tile</code>, and <code>array-assign!</code> have been added.</li>
+      <li>The procedures <code>interval-for-each</code>, <code>interval-cartesian-product</code>, <code>array-outer-product</code>, <code>array-tile</code>, <code>array-assign!</code>, and <code>array-swap!</code> have been added.</li>
       <li>The discussion of Haar transforms as examples of separable transforms has been corrected.</li>
       <li>Some matrix examples have been added to this document and test-arrays.scm.</li></ul>
     <h2>Abstract</h2>
-    <p>This SRFI specifies an array mechanism for Scheme. Arrays as defined here are quite general; at their most basic, an array is simply a mapping, or function, from multi-indices of exact integers $i_0,\ldots,i_{d-1}$ to Scheme values.  The set of multi-indices $i_0,\ldots,i_{d-1}$ that are valid for a given array form the <i>domain</i> of the array.  In this SRFI, each array's domain consists  of the cross product of nonempty intervals of exact integers $[l_0,u_0)\times[l_1,u_1)\times\cdots\times[l_{d-1},u_{d-1})$ of $\mathbb Z^d$, $d$-tuples of integers.  Thus, we introduce a data type called $d$-<i>intervals</i>, or more briefly <i>intervals</i>, which encapsulates this notion. (We borrow this terminology from, e.g.,  Elias Zakon's <a href="http://www.trillia.com/zakon-analysisII.html">Mathematical Analysis II</a>.) Specialized variants of arrays are specified to provide portable programs with efficient representations for common use cases.</p>
+    <p>This SRFI specifies an array mechanism for Scheme. Arrays as defined here are quite general; at their most basic, an array is simply a mapping, or function, from multi-indices of exact integers $i_0,\ldots,i_{d-1}$ to Scheme values.  The set of multi-indices $i_0,\ldots,i_{d-1}$ that are valid for a given array form the <i>domain</i> of the array.  In this SRFI, each array's domain consists  of the cross product of nonempty intervals of exact integers $[l_0,u_0)\times[l_1,u_1)\times\cdots\times[l_{d-1},u_{d-1})$ of $\mathbb Z^d$, $d$-tuples of integers.  Thus, we introduce a data type called $d$-<i>intervals</i>, or more briefly <i>intervals</i>, which encapsulates this notion. (We borrow this terminology from, e.g.,  Elias Zakon's <a href="http://www.trillia.com/zakon1.html">Basic Concepts of Mathematics</a>.) Specialized variants of arrays are specified to provide portable programs with efficient representations for common use cases.</p>
     <h2>Motivation</h2>
     <p>This SRFI was motivated by a number of somewhat independent notions, which we outline here and which are explained below.</p>
     <ul>
@@ -192,7 +192,7 @@
         <a href="#array-every">array-every</a>,
         <a href="#array-&gt;list">array-&gt;list</a>,
         <a href="#list-&gt;specialized-array">list-&gt;specialized-array</a>,
-        <a href="#array-assign!">array-assign!</a>.</dd></dl>
+        <a href="#array-assign!">array-assign!</a><a href="#array-swqp!">array-swap!</a>.</dd></dl>
     <h2>Miscellaneous Functions</h2>
     <p>This document refers to <i>translations</i> and <i>permutations</i>.
        A translation is a vector of exact integers.  A permutation of dimension $n$
@@ -948,7 +948,28 @@ indexer:       (lambda multi-index
               (map array-getter
                    (cons <var>array</var> <var>arrays</var>)))))</code></pre>
     <p>It is assumed that <code><var>f</var></code> is appropriately defined to be evaluated in this context.</p>
+    <p>It is expected that <code>array-map</code> and <code>array-for-each</code> will specialize the construction of</p>
+    <pre><code>
+(lambda multi-index
+  (apply <var>f</var>
+         (map (lambda (g)
+                (apply g multi-index))
+              (map array-getter
+                   (cons <var>array</var>
+                         <var>arrays</var>)))))</code></pre>
     <p>It is an error to call <code>array-map</code> if its arguments do not satisfy these conditions.</p>
+    <p><b>Note: </b>The ease of constructing temporary arrays without allocating storage makes it trivial to imitate, e.g., Javascript's map with index. For example, we can add the index to each element of an array <code><var>a</var></code> by </p>
+    <pre><code>
+(array-map +
+           a
+           (make-array (array-domain a)
+                       (lambda (i) i)))</code></pre>
+    <p>or even</p>
+    <pre><code>
+(make-array (array-domain a)
+            (let ((a_ (array-getter a)))
+              (lambda (i)
+                (+ (a_ i) i))))</code></pre>
     <p><b>Procedure: </b><code><a name="array-for-each">array-for-each</a> <var>f</var> <var>array</var> . <var>arrays</var></code></p>
     <p>If <code><var>array</var></code>, <code>(car <var>arrays</var>)</code>, ... all have the same domain  and <code><var>f</var></code> is an appropriate procedure, then <code>array-for-each</code>
       calls</p>
@@ -1021,6 +1042,10 @@ indexer:       (lambda multi-index
     <p>Assumes that <code><var>destination</var></code> is a mutable array and <code><var>source</var></code> is an array, both with the same domains, and that the elements of <code><var>source</var></code> can be stored into <code><var>destination</var></code>.</p>
     <p>Evaluates <code>(array-getter <var>source</var>)</code> on the multi-indices in <code>(array-domain <var>source</var>)</code> in lexicographical order, and associates each value to the same multi-index in <code><var>destination</var></code>.</p>
     <p>It is an error if the arguments don't satisfy these assumptions.</p>
+    <p><b>Procedure: </b><code><a name="array-swap!">array-swap!</a> <var>A</var> <var>B</var></code></p>
+    <p>Assumes that <code><var>A</var></code> and <code><var>B</var></code> are mutable arrays with the same domain, and that the elements of each of them can ge stored in the other.</p>
+    <p>Evaluates <code>(array-getter <var>A</var>)</code> on the multi-indices in <code>(array-domain <var>A</var>)</code> in lexicographical order, and associates each value to the same multi-index in <code><var>B</var></code>; similarly it assigns the values of <code>(array-getter <var>B</var>)</code> applied to the  multi-indices of <code>(array-domain <var>B</var>)</code> to the associated indices in <code><var>A</var></code>.</p>
+    <p>It is an error if the arguments don't satisfy these assumptions.</p>
     <h2>Implementation</h2>
     <p>We provide an implementation in Gambit-C; the nonstandard techniques used
       in the implementation are: DSSSL-style optional and keyword arguments; a
@@ -1056,8 +1081,8 @@ indexer:       (lambda multi-index
       <li>Arrays must have a getter, but may have no setter.</li></ul>
     <h2>Other examples</h2>
     <p>Image processing applications provided significant motivation for this SRFI.</p>
-    <p><b>Reading an image file in PGM format. </b>On a system with eight-bit chars, one
-      can write a function to read greyscale images in the PGM format of the netpbm package as follows.  The  lexicographical
+    <p><b>Manipulating images in PGM format. </b>On a system with eight-bit chars, one
+      can write routines to read and write greyscale images in the PGM format of the netpbm package as follows.  The  lexicographical
       order in array-&gt;specialized-array guarantees the the correct order of execution of the input procedures:</p>
     <pre><code>
 (define make-pgm   cons)
@@ -1161,7 +1186,146 @@ indexer:       (lambda multi-index
                     (error &quot;not a pgm file&quot;))))
           (if (&lt; greys 256)
               u8-storage-class
-              u16-storage-class)))))))</code></pre>
+              u16-storage-class)))))))
+
+(define (write-pgm pgm-data file #!optional force-ascii)
+  (call-with-output-file
+      file
+    (lambda (port)
+      (let* ((greys
+              (pgm-greys pgm-data))
+	     (pgm-array
+              (pgm-pixels pgm-data))
+	     (domain
+              (array-domain pgm-array))
+	     (rows
+              (fx- (interval-upper-bound domain 0)
+                   (interval-lower-bound domain 0)))
+	     (columns
+              (fx- (interval-upper-bound domain 1)
+                   (interval-lower-bound domain 1))))
+	(if force-ascii
+	    (display &quot;P2&quot; port)
+	    (display &quot;P5&quot; port))
+	(newline port)
+	(display columns port) (display  port)
+	(display rows port) (newline port)
+	(display greys port) (newline port)
+	(array-for-each
+         (if force-ascii
+             (let ((next-pixel-in-line 1))
+               (lambda (p)
+                 (write p port)
+                 (if (fxzero? (fxand next-pixel-in-line 15))
+                     (begin
+                       (newline port)
+                       (set! next-pixel-in-line 1))
+                     (begin
+                       (display  port)
+                       (set! next-pixel-in-line
+                             (fx+ 1 next-pixel-in-line))))))
+             (if (fx&lt; greys 256)
+                 (lambda (p)
+                   (write-u8 p port))
+                 (lambda (p)
+                   (write-u8 (fxand p 255) port)
+                   (write-u8 (fxarithmetic-shift-right p 8)
+                             port))))
+         pgm-array)))))
+</code></pre>
+    <p>One can write a a routine to convolve an image with a filter as follows: </p>
+    <pre><code>
+(define (array-convolve source filter)
+  (let* ((source-domain
+          (array-domain source))
+         (S_
+          (array-getter source))
+         (filter-domain
+          (array-domain filter))
+         (F_
+          (array-getter filter))
+         (result-domain
+          (interval-dilate
+           source-domain
+           ;; the left bound of an interval is an equality,
+           ;; the right bound is an inequality, hence the
+           ;; the difference in the following two expressions
+           (vector-map -
+                       (interval-lower-bounds-&gt;vector filter-domain))
+           (vector-map (lambda (x)
+                         (- 1 x))
+                       (interval-upper-bounds-&gt;vector filter-domain)))))
+    (make-array result-domain
+                (lambda (i j)
+                  (array-fold
+                   (lambda (p q)
+                     (+ p q))
+                   0
+                   (make-array
+                    filter-domain
+                    (lambda (k l)
+                      (* (S_ (+ i k)
+                             (+ j l))
+                         (F_ k l))))))
+                )))
+</code></pre>
+    <p>together with some filters</p>
+    <pre><code>
+(define sharpen-filter
+  (list-&gt;specialized-array
+   '(0 -1  0
+    -1  5 -1
+     0 -1  0)
+   (make-interval '#(-1 -1) '#(2 2))))
+
+(define edge-filter
+  (list-&gt;specialized-array
+   '(0 -1  0
+    -1  4 -1
+     0 -1  0)
+   (make-interval '#(-1 -1) '#(2 2))))
+</code></pre>
+    <p>Our computations might results in pixel values outside the valid range, so we define </p>
+    <pre><code>
+(define (round-and-clip pixel max-grey)
+  (max 0 (min (exact (round pixel)) max-grey)))
+</code></pre>
+    <p>We can then compute edges and sharpen a test image as follows: </p><code>
+    <pre>
+(define test-pgm (read-pgm &quot;girl.pgm&quot;))
+
+(let ((greys (pgm-greys test-pgm)))
+  (write-pgm
+   (make-pgm
+    greys
+    (array-map (lambda (p)
+                 (round-and-clip p greys))
+               (array-convolve
+                (pgm-pixels test-pgm)
+                sharpen-filter)))
+   &quot;sharper-test.pgm&quot;))
+
+(let* ((greys (pgm-greys test-pgm))
+       (edge-array
+        (array-&gt;specialized-array
+         (array-map
+          abs
+          (array-convolve
+           (pgm-pixels test-pgm)
+           edge-filter))))
+       (max-pixel
+        (array-fold max 0 edge-array))
+       (normalizer
+        (inexact (/ greys max-pixel))))
+  (write-pgm
+   (make-pgm
+    greys
+    (array-map (lambda (p)
+                 (- greys
+                    (round-and-clip (* p normalizer) greys)))
+               edge-array))
+   &quot;edge-test.pgm&quot;))
+</pre></code>
     <p><b>Viewing two-dimensional slices of three-dimensional data. </b>One example might be viewing two-dimensional slices of three-dimensional data in different ways.  If one has a $1024 \times 512\times 512$ 3D image of the body stored as a variable <code><var>body</var></code>, then one could get 1024 axial views, each $512\times512$, of this 3D body by <code>(array-curry <var>body</var> 2)</code>; or 512 median views, each $1024\times512$, by <code>(array-curry (array-permute <var>body</var> '#(1 0 2)) 2)</code>; or finally 512 frontal views, each again $1024\times512$ pixels, by <code>(array-curry (array-permute <var>body</var> '#(2 0 1)) 2)</code>; see <a href="https://en.wikipedia.org/wiki/Anatomical_plane">Anatomical plane</a>.</p>
     <p><b>Calculating second differences of images. </b>For another example, if a real-valued function is defined
       on a two-dimensional interval $I$, its second difference in the direction $d$ at the point $x$ is defined as $\Delta^2_df(x)=f(x+2d)-2f(x+d)+f(x)$,

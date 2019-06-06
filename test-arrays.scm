@@ -1,6 +1,8 @@
 (declare (standard-bindings)(extended-bindings)(block)(safe) (mostly-fixnum))
+(include "generic-arrays.scm")
 (declare (inlining-limit 0))
-(define tests 10000)
+(define tests 100)
+(set! tests tests)
 
 (define-macro (test expr value)
   `(let* (;(ignore (pretty-print ',expr))
@@ -2176,7 +2178,65 @@
                                       multi-index))))
           #t)))
          
-         
+(pp "array-swap! tests")
+
+(test (array-swap! 'a 'a)
+      "array-swap!: The first argument is not a mutable array: ")
+
+(test (array-swap! (make-array (make-interval '#(0 0) '#(1 1)) values) 'a)
+      "array-swap!: The first argument is not a mutable array: ")
+
+(test (array-swap! (array->specialized-array (make-array (make-interval '#(0 0) '#(1 1)) values)) 'a)
+      "array-swap!: The second argument is not a mutable array: ")
+
+(test (array-swap! (array->specialized-array (make-array (make-interval '#(0 0) '#(1 1)) values))
+                   (make-array (make-interval '#(0 0) '#(1 1)) values))
+      "array-swap!: The second argument is not a mutable array: ")
+
+(test (array-swap! (array->specialized-array (make-array (make-interval '#(0 0) '#(1 1)) values))
+                   (array->specialized-array (make-array (make-interval '#(0 0) '#(2 1)) values)))
+      "array-swap!: The arguments do not have the same domain: ")
+
+(do ((i 0 (fx+ i 1)))
+    ((fx= i tests))
+  (let* ((interval
+          (random-interval 1 6))
+         (subinterval
+          (random-subinterval interval))
+         (specialized-array  ;; multi-index in order
+          (array->specialized-array (make-array interval list)))
+         (mutable-array      ;; multi-index in reversed ordr
+          (let ((specialized-array
+                 (array->specialized-array
+                  (make-array interval (lambda args (reverse args))))))
+            (make-array interval
+                        (array-getter specialized-array)
+                        (array-setter specialized-array))))
+         (specialized-subarray
+          (array-extract specialized-array subinterval))
+         (mutable-subarray
+          (array-extract mutable-array subinterval)))
+    (if (zero? (random 0 2))
+        (array-swap! specialized-subarray mutable-subarray)
+        (array-swap! mutable-subarray specialized-subarray))
+    (test (myarray= specialized-array
+                    ;; list of args, reversed in subarray
+                    (make-array interval
+                                (lambda multi-index
+                                  (if (apply interval-contains-multi-index? subinterval multi-index)
+                                      (reverse multi-index)
+                                      multi-index))))
+          #t)
+    (test (myarray= mutable-array
+                    ;; list of reversed args, except in subarray
+                    (make-array interval
+                                (lambda multi-index
+                                  (if (apply interval-contains-multi-index? subinterval multi-index)
+                                      multi-index
+                                      (reverse multi-index)))))
+          #t)))
+
+
 
 (pp "Miscellaneous error tests")
 
@@ -2473,14 +2533,191 @@
 			  (else
 			   (error "read-pgm: not a pgm file"))))))))))
 
-(define a (read-pgm "test.pgm"))
+(define (write-pgm pgm-data file #!optional force-ascii)
+  (call-with-output-file
+      file
+    (lambda (port)
+      (let* ((greys
+              (pgm-greys pgm-data))
+	     (pgm-array
+              (pgm-pixels pgm-data))
+	     (domain
+              (array-domain pgm-array))
+	     (rows
+              (fx- (interval-upper-bound domain 0)
+                   (interval-lower-bound domain 0)))
+	     (columns
+              (fx- (interval-upper-bound domain 1)
+                   (interval-lower-bound domain 1))))
+	(if force-ascii
+	    (display "P2" port)
+	    (display "P5" port))
+	(newline port)
+	(display columns port) (display " " port)
+	(display rows port) (newline port)
+	(display greys port) (newline port)
+	(array-for-each (if force-ascii
+                            (let ((next-pixel-in-line 1))
+                              (lambda (p)
+                                (write p port)
+                                (if (fxzero? (fxand next-pixel-in-line 15))
+                                    (begin
+                                      (newline port)
+                                      (set! next-pixel-in-line 1))
+                                    (begin
+                                      (display " " port)
+                                      (set! next-pixel-in-line (fx+ 1 next-pixel-in-line))))))
+                            (if (fx< greys 256)
+                                (lambda (p)
+                                  (write-u8 p port))
+                                (lambda (p)
+                                  (write-u8 (fxand p 255) port)
+                                  (write-u8 (fxarithmetic-shift-right p 8) port))))
+                        pgm-array)))))
 
-(test (and (array? (pgm-pixels a))
-	   (interval= (array-domain (pgm-pixels a))
-		      (make-interval '#(0 0) '#(128 128)))
-	   (= ((array-getter (pgm-pixels a)) 127 127)
-	      225))
-      #t)
+(define test-pgm (read-pgm "girl.pgm"))
+
+(define (array-dot-product a b)
+  (array-fold (lambda (x y)
+                (+ x y))
+              0
+              (array-map
+               (lambda (x y)
+                 (* x y))
+               a b)))
+
+(define (array-convolve source filter)
+  (let* ((source-domain
+          (array-domain source))
+         (S_
+          (array-getter source))
+         (filter-domain
+          (array-domain filter))
+         (F_
+          (array-getter filter))
+         (result-domain
+          (interval-dilate
+           source-domain
+           ;; left bound of an interval is an equality,
+           ;; right bound is an inequality, hence the
+           ;; the difference in the following two expressions
+           (vector-map -
+                       (interval-lower-bounds->vector filter-domain))
+           (vector-map (lambda (x)
+                         (- 1 x))
+                       (interval-upper-bounds->vector filter-domain)))))
+    (make-array result-domain
+                #|
+                This was my first attempt at convolve, but the problem is that
+                it creates two specialized arrays per pixel, which is a lot of
+                overhead (computing an indexer and a setter, for example) for
+                not very much computation.
+                (lambda (i j)
+                  (array-dot-product
+                   (array-extract
+                    (array-translate source (vector (- i) (- j)))
+                    filter-domain)
+                   filter))
+
+                The times are
+(time (let ((greys (pgm-greys test-pgm))) (write-pgm (make-pgm greys (array-map (lambda (p) (round-and-clip p greys)) (array-convolve (pgm-pixels test-pgm) sharpen-filter))) "sharper-test.pgm")))
+    0.514201 secs real time
+    0.514190 secs cpu time (0.514190 user, 0.000000 system)
+    64 collections accounting for 0.144107 secs real time (0.144103 user, 0.000000 system)
+    663257736 bytes allocated
+    676 minor faults
+    no major faults
+(time (let* ((greys (pgm-greys test-pgm)) (edge-array (array->specialized-array (array-map abs (array-convolve (pgm-pixels test-pgm) edge-filter)))) (max-pixel (array-fold max 0 edge-array)) (normalizer (/ greys max-pixel))) (write-pgm (make-pgm greys (array-map (lambda (p) (- greys (round-and-clip (* p normalizer) greys))) edge-array)) "edge-test.pgm")))
+    0.571130 secs real time
+    0.571136 secs cpu time (0.571136 user, 0.000000 system)
+    57 collections accounting for 0.154109 secs real time (0.154093 user, 0.000000 system)
+    695631496 bytes allocated
+    959 minor faults
+    no major faults
+
+
+In the following, where we just package up a little array for each result pixel
+that computes the componentwise products when we need them, the times are
+
+(time (let ((greys (pgm-greys test-pgm))) (write-pgm (make-pgm greys (array-map (lambda (p) (round-and-clip p greys)) (array-convolve (pgm-pixels test-pgm) sharpen-filter))) "sharper-test.pgm")))
+    0.095921 secs real time
+    0.095922 secs cpu time (0.091824 user, 0.004098 system)
+    6 collections accounting for 0.014276 secs real time (0.014275 user, 0.000000 system)
+    62189720 bytes allocated
+    678 minor faults
+    no major faults
+(time (let* ((greys (pgm-greys test-pgm)) (edge-array (array->specialized-array (array-map abs (array-convolve (pgm-pixels test-pgm) edge-filter)))) (max-pixel (array-fold max 0 edge-array)) (normalizer (inexact (/ greys max-pixel)))) (write-pgm (make-pgm greys (array-map (lambda (p) (- greys (round-and-clip (* p normalizer) greys))) edge-array)) "edge-test.pgm")))
+    0.165065 secs real time
+    0.165066 secs cpu time (0.165061 user, 0.000005 system)
+    13 collections accounting for 0.033885 secs real time (0.033878 user, 0.000000 system)
+    154477720 bytes allocated
+    966 minor faults
+    no major faults
+            |#
+                (lambda (i j)
+                  (array-fold
+                   (lambda (p q)
+                     (+ p q))
+                   0
+                   (make-array
+                    filter-domain
+                    (lambda (k l)
+                      (* (S_ (+ i k)
+                             (+ j l))
+                         (F_ k l))))))
+                )))
+
+(define sharpen-filter
+  (list->specialized-array
+   '(0 -1  0
+    -1  5 -1
+     0 -1  0)
+   (make-interval '#(-1 -1) '#(2 2))))
+
+(define edge-filter
+  (list->specialized-array
+   '(0 -1  0
+    -1  4 -1
+     0 -1  0)
+   (make-interval '#(-1 -1) '#(2 2))))
+
+(define (round-and-clip pixel max-grey)
+  (max 0 (min (exact (round pixel)) max-grey)))
+
+(time
+ (let ((greys (pgm-greys test-pgm)))
+   (write-pgm
+    (make-pgm
+     greys
+     (array-map (lambda (p)
+                  (round-and-clip p greys))
+                (array-convolve
+                 (pgm-pixels test-pgm)
+                 sharpen-filter)))
+    "sharper-test.pgm")))
+
+(time
+ (let* ((greys (pgm-greys test-pgm))
+        (edge-array
+         (array->specialized-array
+          (array-map
+           abs
+           (array-convolve
+            (pgm-pixels test-pgm)
+            edge-filter))))
+        (max-pixel
+         (array-fold max 0 edge-array))
+        (normalizer
+         (inexact (/ greys max-pixel))))
+   (write-pgm
+    (make-pgm
+     greys
+     (array-map (lambda (p)
+                  (- greys
+                     (round-and-clip (* p normalizer) greys)))
+                edge-array))
+    "edge-test.pgm")))
+
 
 (define m (array->specialized-array (make-array (make-interval '#(0 0) '#(40 30)) (lambda (i j) (exact->inexact (+ i j))))))
 
@@ -2734,6 +2971,7 @@
                     subarray
                     (array-outer-product * column row)))))))
 
+
 (define A
   ;; A Hilbert matrix
   (array->specialized-array
@@ -2781,15 +3019,12 @@
 
 ;;; We'll define a brief, not-very-efficient matrix multiply routine.
 
-(define (dot-product a b)
-  (array-fold + 0 (array-map * a b)))
-
 (define (matrix-multiply a b)
   (let ((a-rows
          (array-curry a 1))
         (b-columns
          (array-curry (array-permute b '#(1 0)) 1)))
-    (array-outer-product dot-product a-rows b-columns)))
+    (array-outer-product array-dot-product a-rows b-columns)))
 
 ;;; We'll check that the product of the result of LU
 ;;; decomposition of A is again A.
