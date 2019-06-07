@@ -331,7 +331,7 @@ they may have hash tables or databases behind an implementation, one may read th
                  (<a> href: "#array->list" "array->list") END
                  (<a> href: "#list->specialized-array" "list->specialized-array") END
                  (<a> href: "#array-assign!" "array-assign!")
-                 (<a> href: "#array-swqp!" "array-swap!")
+                 (<a> href: "#array-swap!" "array-swap!")
                  "."
                  )))
         (<h2> "Miscellaneous Functions")
