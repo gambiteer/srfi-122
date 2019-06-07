@@ -330,7 +330,7 @@ they may have hash tables or databases behind an implementation, one may read th
                  (<a> href: "#array-every" "array-every")END
                  (<a> href: "#array->list" "array->list") END
                  (<a> href: "#list->specialized-array" "list->specialized-array") END
-                 (<a> href: "#array-assign!" "array-assign!")
+                 (<a> href: "#array-assign!" "array-assign!") END
                  (<a> href: "#array-swap!" "array-swap!")
                  "."
                  )))
