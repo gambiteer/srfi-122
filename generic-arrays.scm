@@ -2798,7 +2798,7 @@
 
 (define (array->list array)
   (cond ((not (array? array))
-	 (error "array->list: object is not an array: " array))
+	 (error "array->list: The argument is not an array: " array))
  	(else
 	 (array-fold-right cons '() array))))
 
