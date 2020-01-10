@@ -80,7 +80,7 @@ MathJax.Hub.Config({
         (<h2> "Post-finalization note")
         (<p> "This document, the associated implementation in generic-arrays.scm, and the test file test-arrays.scm differ from the finalized SRFI-122 in the following ways:")
         (<ul>
-         (<li> "The abstract has been rewritten to make it more precise.")
+         (<li> "The abstract has been rewritten to make it more precise.  A \"Motivation\" section was added.")
          (<li> "The procedures "(<code>'interval-for-each)", "(<code>'interval-cartesian-product)", "(<code>'array-outer-product)", "(<code>'array-tile)", "(<code>'array-assign!)", and "(<code>'array-swap!)" have been added.")
          (<li> "The discussion of Haar transforms as examples of separable transforms has been corrected.")
          (<li> "The documentation has a few more examples of image processing algorithms.")
